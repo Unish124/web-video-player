@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local Video Player</title>
+<link rel="stylesheet" href="css/player.css">
+</head>
+<body>
+<div id="app">
+
+  <input type="file" id="fileInput" multiple accept="video/*" hidden>
+
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-inner">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zm1 2v9h14V8H5zm5.5 1.8 4.7 3-4.7 3v-6z"/></svg>
+      <h1>Local Video Player</h1>
+      <p>Drag &amp; drop video files anywhere on this page</p>
+      <button id="openBtn">Open video files</button>
+      <div class="or-divider">or</div>
+      <div class="url-row">
+        <input type="text" id="urlInput" placeholder="Paste a direct video link (.mp4, .webm, .m3u8…)">
+        <button id="urlAddBtn">Add</button>
+      </div>
+      <div class="url-error" id="urlError"></div>
+      <p class="hint">Everything plays locally in your browser — nothing is uploaded. Paste a YouTube link and it's auto-detected and embedded with YouTube's own player; other links must be direct video files (.mp4, .webm…).</p>
+    </div>
+  </div>
+
+  <div class="player-wrapper hidden" id="playerWrapper">
+    <video id="video" playsinline crossorigin="anonymous"></video>
+    <video id="thumbVideo" muted hidden crossorigin="anonymous"></video>
+    <canvas id="thumbCanvas" width="150" height="84" hidden></canvas>
+    <div id="youtubePlayerContainer"><div id="ytPlayerTarget"></div></div>
+
+    <div class="gesture-layer" id="gestureLayer">
+      <div class="gesture-zone left" id="zoneLeft"></div>
+      <div class="gesture-zone center" id="zoneCenter"></div>
+      <div class="gesture-zone right" id="zoneRight"></div>
+    </div>
+
+    <div class="seek-flash left" id="flashLeft">
+      <svg viewBox="0 0 24 24"><path d="M11 5V1L4.6 6.4 11 12V8c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H3c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z"/></svg>
+      <span id="flashLeftLabel">10 seconds</span>
+    </div>
+    <div class="seek-flash right" id="flashRight">
+      <svg viewBox="0 0 24 24"><path d="M13 5V1l6.4 5.4L13 12V8c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6h2c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8z"/></svg>
+      <span id="flashRightLabel">10 seconds</span>
+    </div>
+    <div class="center-icon" id="centerIcon"></div>
+    <div class="hold-speed-indicator" id="holdSpeedIndicator">
+      <span>2x</span>
+      <svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6z"/></svg>
+    </div>
+    <div class="spinner" id="spinner"></div>
+
+    <div class="top-bar" id="topBar">
+      <button class="icon-btn" id="playlistToggleBtn" title="Show/hide playlist (P)">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h10v2H4z"/></svg>
+      </button>
+      <button class="icon-btn" id="addFilesTopBtn" title="Open more video files">
+        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+      </button>
+      <div class="video-title" id="videoTitle">No video loaded</div>
+    </div>
+
+    <div class="fs-study-timer-pill hidden" id="fsStudyTimerPill">
+      <svg class="fs-pill-icon" viewBox="0 0 24 24" width="14" height="14"><path d="M15 1H9v2h6zm-4 13h2V8h-2zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-1.98-.65-3.81-1.75-5.29l.78-.71-1.42-1.42zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+      <span class="fs-pill-time" id="fsPillTime">25:00</span>
+      <button class="fs-pill-close" id="fsPillCloseBtn" title="Hide">✕</button>
+    </div>
+
+    <div class="shortcuts-overlay hidden" id="shortcutsOverlay">
+      <div class="shortcuts-card">
+        <h2>Keyboard shortcuts</h2>
+        <div class="shortcuts-grid" id="shortcutsGrid"></div>
+        <button class="shortcuts-close" id="shortcutsCloseBtn">Close</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="bottom-controls" id="bottomControls">
+      <div class="progress-row">
+        <div class="progress-bar" id="progressBar">
+          <div class="progress-track" id="progressTrack">
+            <div class="progress-buffered" id="bufferedBar"></div>
+            <div class="progress-hover" id="hoverBar"></div>
+            <div class="progress-played" id="playedBar"></div>
+            <div class="progress-ab-segment" id="abSegmentBar"></div>
+            <div class="progress-ab-marker" id="abMarkerA" title="Point A"></div>
+            <div class="progress-ab-marker" id="abMarkerB" title="Point B"></div>
+            <div class="progress-handle" id="progressHandle"></div>
+          </div>
+          <div class="progress-tooltip" id="progressTooltip">
+            <canvas id="tooltipCanvas" width="150" height="84"></canvas>
+            <span id="tooltipTime">0:00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <div class="controls-left">
+          <button class="icon-btn" id="playBtn" title="Play/Pause (k)"></button>
+          <button class="icon-btn" id="prevBtn" title="Previous (Shift+P)">
+            <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+          </button>
+          <button class="icon-btn" id="nextBtn" title="Next (Shift+N)">
+            <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+          </button>
+          <div class="volume-group" id="volumeGroup">
+            <button class="icon-btn" id="muteBtn" title="Mute (m)"></button>
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="1">
+          </div>
+          <div class="time-display"><span id="curTime">0:00</span> / <span id="durTime">0:00</span></div>
+        </div>
+
+        <div class="controls-right">
+          <button class="icon-btn small" id="abLoopBtn" title="A/B loop — click to set point A, click again for B">
+            <svg viewBox="0 0 24 24"><path d="M10 18v-1H8.42c-1.9 0-3.45-1.48-3.5-3.33-.05-1.92 1.61-3.59 3.53-3.62L10 10V9h4v1h1.58c1.9 0 3.45 1.48 3.5 3.33.05 1.92-1.61 3.59-3.53 3.62L14 17v1z" opacity="0"/><path d="M8 6h2v2H8zm0 4h2v10H8zm6-4h2v2h-2zm0 4h2v10h-2z"/></svg>
+            <span class="ab-label">A</span>
+          </button>
+          <div class="study-timer-wrap">
+            <button class="icon-btn small" id="studyTimerBtn" title="Study timer">
+              <svg viewBox="0 0 24 24"><path d="M15 1H9v2h6zm-4 13h2V8h-2zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-1.98-.65-3.81-1.75-5.29l.78-.71-1.42-1.42zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+            </button>
+          </div>
+          <button class="icon-btn small" id="loopBtn" title="Loop (Shift+L)">
+            <svg viewBox="0 0 24 24"><path d="M7 7h8v3l4-4-4-4v3H5v6h2V7zm10 10H9v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+          </button>
+          <div class="settings-wrap">
+            <button class="icon-btn small" id="settingsBtn" title="Settings">
+              <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.1 7.1 0 0 0 .06-.94 7.1 7.1 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.6.24-1.15.56-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.62-.06.94s.02.64.06.94L2.82 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.48.38 1.03.7 1.63.94l.36 2.54c.05.24.26.42.5.42h3.84c.24 0 .45-.18.5-.42l.36-2.54c.6-.24 1.15-.56 1.63-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+            </button>
+            <!--
+              Two-level "main list -> submenu" settings menu (see
+              controls.js's showSettingsPanel()/wireSettingsNavigation()).
+              Only one .settings-panel has the .active class at a time.
+              Each main-panel row's data-target names the submenu panel
+              id it opens; each submenu's header's data-back returns to
+              settingsMainPanel. playback-enhancements' duration.js
+              appends its "Video & playlist lengths" toggle into
+              settingsMainPanel, and speed.js appends its custom-speed
+              slider into settingsSpeedPanel (after the native presets).
+            -->
+            <div class="settings-menu hidden" id="settingsMenu">
+
+              <div class="settings-panel active" id="settingsMainPanel">
+                <div class="settings-row" data-target="settingsSpeedPanel">
+                  <span>Playback speed</span>
+                  <span class="settings-row-value" id="speedRowValue">Normal</span>
+                  <span class="settings-row-chevron">›</span>
+                </div>
+                <div class="settings-row" data-target="settingsSkipPanel">
+                  <span>Skip amount</span>
+                  <span class="settings-row-value" id="skipRowValue">10 seconds</span>
+                  <span class="settings-row-chevron">›</span>
+                </div>
+                <div class="settings-row" data-target="settingsBtnSizePanel">
+                  <span>Button size</span>
+                  <span class="settings-row-value" id="btnSizeRowValue">Large</span>
+                  <span class="settings-row-chevron">›</span>
+                </div>
+              </div>
+
+              <div class="settings-panel" id="settingsSpeedPanel">
+                <div class="settings-panel-header" data-back>
+                  <span class="settings-back-arrow">‹</span><span>Playback speed</span>
+                </div>
+                <div id="speedOptions"></div>
+              </div>
+
+              <div class="settings-panel" id="settingsSkipPanel">
+                <div class="settings-panel-header" data-back>
+                  <span class="settings-back-arrow">‹</span><span>Skip amount (arrows / double-click)</span>
+                </div>
+                <div id="skipOptions"></div>
+              </div>
+
+              <div class="settings-panel" id="settingsBtnSizePanel">
+                <div class="settings-panel-header" data-back>
+                  <span class="settings-back-arrow">‹</span><span>Button size</span>
+                </div>
+                <div id="btnSizeOptions"></div>
+              </div>
+
+            </div>
+          </div>
+          <button class="icon-btn small" id="pipBtn" title="Picture-in-picture (i)">
+            <svg viewBox="0 0 24 24"><path d="M19 7H9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm0 8H9V9h10v6zM3 5h2v2H3zm0 4h2v2H3zm0 4h2v2H3zm0 4h2v2H3zm4 2h2v-2H5v2H7zm4 0h2v-2h-2v2z" opacity="0"/><path d="M21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H3V5h18v14zm-2-8h-7a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1z"/></svg>
+          </button>
+          <button class="icon-btn small" id="theaterBtn" title="Theater mode (t)">
+            <svg viewBox="0 0 24 24"><path d="M20 6H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm0 10H4V8h16v8z"/></svg>
+          </button>
+          <button class="icon-btn small" id="fullscreenBtn" title="Fullscreen (f)"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="playlist-panel hidden" id="playlistPanel">
+    <div class="playlist-header">
+      <h2>Playlist</h2>
+      <div class="playlist-header-btns">
+        <button class="icon-btn small" id="saveLinksBtn" title="Save current links to your Saved playlist (survives refresh/close)">
+          <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+        </button>
+        <button class="icon-btn small" id="addMoreBtn" title="Add files">
+          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+        </button>
+        <button class="icon-btn small" id="addUrlBtn2" title="Add from URL">
+          <svg viewBox="0 0 24 24">
+            <g transform="scale(0.72)">
+              <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+            </g>
+            <circle cx="18" cy="18" r="6.6" fill="#1b1b1b"/>
+            <rect x="14.8" y="17" width="6.4" height="2" rx="1"/>
+            <rect x="17" y="14.8" width="2" height="6.4" rx="1"/>
+          </svg>
+        </button>
+        <button class="icon-btn small" id="featuresBtn" title="Extra features (resume, multiple playlists, A/B loop, study timer)">
+          <svg viewBox="0 0 24 24">
+            <g transform="scale(0.8)">
+              <path d="M19.14 12.94a7.1 7.1 0 0 0 .06-.94 7.1 7.1 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.6.24-1.15.56-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.62-.06.94s.02.64.06.94L2.82 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.48.38 1.03.7 1.63.94l.36 2.54c.05.24.26.42.5.42h3.84c.24 0 .45-.18.5-.42l.36-2.54c.6-.24 1.15-.56 1.63-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/>
+            </g>
+            <path d="M18.5 15.8v2.1h2.1v1h-2.1v2.1h-1v-2.1h-2.1v-1h2.1v-2.1z"/>
+          </svg>
+        </button>
+        <button class="icon-btn small" id="closePlaylistBtn" title="Close playlist">
+          <svg viewBox="0 0 24 24"><path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.29 1.41 1.41 6.3-6.29 6.3 6.29 1.41-1.41-6.3-6.29 6.3-6.3z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="playlist-tabs" id="playlistTabs">
+      <div class="playlist-tab active" data-tab="playing">Now Playing</div>
+      <div class="playlist-tab" data-tab="saved:default">Saved<span class="count" id="savedCountBadge" hidden>0</span></div>
+      <div id="extraPlaylistTabs" style="display:contents;"></div>
+      <div class="playlist-tab saved-extra" id="addPlaylistTab" data-tab="__add__" title="New playlist">+</div>
+    </div>
+    <ul id="playlistItems"></ul>
+    <ul id="savedItems" class="hidden"></ul>
+  </div>
+
+  <div class="shortcuts-overlay hidden" id="urlModalOverlay">
+    <div class="shortcuts-card" style="max-width:440px;">
+      <h2>Add video from URL</h2>
+      <div class="url-row" style="margin-top:0;">
+        <input type="text" id="urlModalInput" placeholder="https://example.com/video.mp4">
+        <button id="urlModalAddBtn">Add</button>
+      </div>
+      <div class="url-error" id="urlModalError"></div>
+      <p style="color:#888;font-size:.78rem;margin-top:10px;">Paste a YouTube link (youtube.com or youtu.be) and it's auto-detected and embedded with YouTube's own player. Other links must be direct video files (.mp4, .webm, .ogg) that the host allows browsers to fetch — it won't work with Netflix or other streaming site pages.</p>
+      <button class="shortcuts-close" id="urlModalCloseBtn">Close</button>
+    </div>
+  </div>
+
+  <div class="shortcuts-overlay hidden" id="featuresOverlay">
+    <div class="shortcuts-card" style="max-width:480px;">
+      <h2>Extra features</h2>
+      <p style="color:#888;font-size:.78rem;margin:-6px 0 4px;">Off by default to keep things simple — switch on whichever you want.</p>
+      <div class="feature-row" data-feature="resume">
+        <div class="feature-info">
+          <div class="feature-name">Resume playback</div>
+          <div class="feature-desc">Remembers where you left off on saved video links and picks back up there next time.</div>
+        </div>
+        <div class="toggle-switch" data-feature="resume"><div class="knob"></div></div>
+      </div>
+      <div class="feature-row" data-feature="multi">
+        <div class="feature-info">
+          <div class="feature-name">Multiple playlists</div>
+          <div class="feature-desc">Create extra named playlists in the Saved tab, beyond the default one.</div>
+        </div>
+        <div class="toggle-switch" data-feature="multi"><div class="knob"></div></div>
+      </div>
+      <div class="feature-row" data-feature="abloop">
+        <div class="feature-info">
+          <div class="feature-name">A/B loop</div>
+          <div class="feature-desc">Adds a button to mark two points and repeat that section on loop.</div>
+        </div>
+        <div class="toggle-switch" data-feature="abloop"><div class="knob"></div></div>
+      </div>
+      <div class="feature-row" data-feature="timer">
+        <div class="feature-info">
+          <div class="feature-name">Study timer</div>
+          <div class="feature-desc">Adds a countdown timer button that pauses the video when time's up. Drag its header to move it, drag the corner to resize it.</div>
+        </div>
+        <div class="toggle-switch" data-feature="timer"><div class="knob"></div></div>
+      </div>
+      <div class="control-toggles-section">
+        <div class="feature-name">Customize player controls</div>
+        <div class="feature-desc" style="margin-bottom:10px;">Show or hide individual buttons and elements in the player, one by one.</div>
+        <div id="controlToggles"></div>
+        <div style="margin-top:8px;">
+          <button id="resetControlVisibilityBtn" class="control-reset-btn" type="button">Show all controls</button>
+        </div>
+      </div>
+      <button class="shortcuts-close" id="featuresCloseBtn" style="margin-top:16px;">Close</button>
+    </div>
+  </div>
+
+  <div class="shortcuts-overlay hidden" id="newPlaylistOverlay">
+    <div class="shortcuts-card" style="max-width:380px;">
+      <h2>New playlist</h2>
+      <div class="url-row" style="margin-top:0;">
+        <input type="text" id="newPlaylistInput" placeholder="Playlist name" maxlength="40">
+        <button id="newPlaylistAddBtn">Create</button>
+      </div>
+      <button class="shortcuts-close" id="newPlaylistCloseBtn">Cancel</button>
+    </div>
+  </div>
+
+  <div class="study-timer-menu hidden" id="studyTimerMenu">
+    <div class="study-timer-header" id="studyTimerHeader">
+      <span class="title">Study timer — drag to move</span>
+      <div class="study-timer-header-btns">
+        <span class="hide-x" id="studyTimerHideBtn" title="Hide all controls except the timer (H)"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg></span>
+        <span class="close-x" id="studyTimerCloseX">✕</span>
+      </div>
+    </div>
+    <div class="study-timer-body">
+      <div class="study-timer-setup" id="studyTimerSetup">
+        <button class="study-timer-setup-back hidden" id="studyTimerSetupBack" type="button">
+          <svg viewBox="0 0 24 24" width="13" height="13"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+          Back to timer
+        </button>
+        <div class="study-timer-durations" id="studyTimerDurations"></div>
+        <div class="study-timer-custom">
+          <input type="number" id="studyTimerCustomInput" min="1" max="300" placeholder="Custom minutes">
+        </div>
+      </div>
+      <div class="study-timer-run" id="studyTimerRun" hidden>
+        <button class="study-timer-edit-btn" id="studyTimerEditBtn" title="Change duration">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </button>
+        <button class="study-timer-style-btn" id="studyTimerStyleBtn" title="Switch to analog clock">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.1.8-1.3-4.5-2.7V7z"/></svg>
+        </button>
+        <div class="study-timer-countdown" id="studyTimerCountdown">25:00</div>
+        <div class="study-timer-analog" id="studyTimerAnalog" hidden>
+          <div class="analog-face" id="analogFace" style="--pct:100%">
+            <div class="analog-time" id="analogTime">25:00</div>
+          </div>
+        </div>
+      </div>
+      <div class="study-timer-actions">
+        <button class="start-btn" id="studyTimerStartBtn">Start</button>
+        <button class="stop-btn hidden" id="studyTimerStopBtn">Pause</button>
+      </div>
+    </div>
+    <div class="study-timer-resize-handle" id="studyTimerResizeHandle" title="Drag to resize"></div>
+  </div>
+
+</div>
+
+  <script type="module" src="src/main.js"></script>
+  <script src="course-feature.js"></script>
+  <script type="module" src="playback-enhancements/index.js"></script>
+</body>
+</html> 
