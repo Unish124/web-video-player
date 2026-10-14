@@ -59,3 +59,12 @@ Pointer-based drag reordering for the Now Playing list. Hovering a row reveals a
 video-player/src/thumbs.js
 
 Playlist thumbnails (YouTube thumbnail images, or a frame captured from local / direct video files) and YouTube title + channel lookup.
+
+video-player/src/install.js
+
+App install button, "open with" file launches (launchQueue) and the "Set as default video player" dialog. Works together with manifest.webmanifest, sw.js and icons/.
+
+video-player/guide.html
+
+Standalone shortcut guide with search and print support (css/guide.css, src/guide.js).
+
