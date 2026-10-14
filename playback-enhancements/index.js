@@ -1,42 +1,8 @@
-/*!
- * index.js
- * Entry point for the playback-enhancements module (custom speed +
- * video/playlist length, on top of the existing Local Video Player).
- *
- * This file:
- *   1. Looks up the native player elements once, and bails out quietly
- *      if the expected player isn't on the page.
- *   2. Defines the small helpers both features need (time/speed
- *      formatting, toast, YouTube-mode detection, pref load/save).
- *   3. Injects the CSS both features' markup relies on.
- *   4. Calls initDuration(deps) and initSpeed(deps), handing each one
- *      everything it needs as a plain object — neither of those files
- *      imports from this one, which avoids a circular import
- *      (index.js → duration.js/speed.js → index.js).
- *
- * This is the only file mainstable.html/index.html links directly:
- *   <script type="module" src="playback-enhancements/index.js"></script>
- *
- * The native ⚙ settings menu is now a two-level "main list -> submenu"
- * navigation (see src/controls.js's showSettingsPanel()) rather than one
- * flat list, so this file also looks up the two panel containers that
- * duration.js/speed.js hook their own rows into:
- *   - nativeSettingsMainPanel — the main category list. duration.js
- *     appends its "Video & playlist lengths" toggle row here.
- *   - nativeSpeedSubmenuPanel — the "Playback speed" submenu (native
- *     presets + back header already inside it). speed.js appends its
- *     custom-speed toggle + slider panel here, after the presets.
- * Both are optional lookups (may be null on an older/unmodified
- * settingsMenu markup) — duration.js/speed.js fall back to appending
- * directly onto nativeSettingsMenu if either is missing, so this file
- * doesn't need to hard-require them.
- */
+/* playback-enhancements/index.js: shared helpers and styles for custom speed and lengths */
+
 import { initDuration } from './duration.js';
 import { initSpeed } from './speed.js';
 
-/* ============================================================
-   0. References into the existing app (read-only DOM access)
-   ============================================================ */
 const nativeApp           = document.getElementById('app');
 const nativeVideo         = document.getElementById('video');
 const nativeFileInput     = document.getElementById('fileInput');
@@ -48,7 +14,6 @@ const nativeSettingsMenu  = document.getElementById('settingsMenu');
 const nativeSpeedOptions  = document.getElementById('speedOptions');
 const nativeToast         = document.getElementById('toast');
 
-// Optional: the settings menu's drill-down panels (see file header).
 const nativeSettingsMainPanel = document.getElementById('settingsMainPanel');
 const nativeSpeedSubmenuPanel = document.getElementById('settingsSpeedPanel');
 
@@ -58,9 +23,6 @@ const REQUIRED_ELEMENTS = [
   nativeSettingsMenu, nativeSpeedOptions, nativeToast
 ];
 
-/* ============================================================
-   1. Small shared helpers — handed to duration.js/speed.js as `deps`
-   ============================================================ */
 function fmtTimePE(sec) {
   if (!isFinite(sec) || sec < 0) sec = 0;
   sec = Math.round(sec);
@@ -92,12 +54,6 @@ function saveBoolPref(key, val) {
   try { localStorage.setItem(key, val ? '1' : '0'); } catch (e) {}
 }
 
-/* ============================================================
-   2. Injected CSS (scoped to pe- prefixed classes; reuses the
-      host app's existing CSS custom properties for theming, and
-      the host app's own .toggle-switch / .toggle-switch.mini
-      styles rather than redefining them)
-   ============================================================ */
 function injectStyles() {
   const style = document.createElement('style');
   style.id = 'peStyles';
@@ -107,7 +63,6 @@ function injectStyles() {
       padding-right:14px;
     }
 
-    /* --- custom speed panel (speed.js) --- */
     .pe-speed-panel{
       padding:4px 14px 10px;
       max-height:200px; opacity:1;
@@ -164,7 +119,6 @@ function injectStyles() {
     }
     .pe-chip-pinned.selected .pe-pin-flag{ background:#fff;color:var(--accent); }
 
-    /* --- video/playlist length display (duration.js) --- */
     .pe-total-badge{
       padding:6px 16px 10px;
       font-size:.74rem;color:var(--text-dim);
@@ -177,9 +131,6 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
-/* ============================================================
-   3. Init
-   ============================================================ */
 function init() {
   injectStyles();
 

@@ -1,97 +1,14 @@
-/*!
- * media.js
- * The video/YouTube abstraction layer: whichever of the two is actually
- * playing, everything else in the app talks to it through the functions
- * exported here instead of touching <video> or YT.Player directly.
- *
- * Depends only on './core.js' (state, video, thumbVideo, tooltipCanvas,
- * playerWrapper, durTimeEl, showToast, fmtTime) — nothing else. That
- * keeps this file at the bottom of the dependency graph alongside
- * core.js itself: controls.js, playlist.js, and study-timer.js all
- * import from media.js, but media.js never imports from any of them.
- *
- * Two places where this file would otherwise need to call into
- * controls.js or playlist.js are handled without doing so:
- *
- *   0. Clearing A/B loop points for a new item (controls.js's state)
- *      is done by dispatching a 'lvp:itemloading' CustomEvent on the
- *      real <video> element at the start of loadMediaItem(), which
- *      controls.js listens for — rather than this file (or playlist.js,
- *      which calls loadMediaItem) importing controls.js directly.
- *
- *   1. Advancing to the next playlist item when playback ends (and
- *      isn't looping) is playlist.js's call to make, not this file's —
- *      so instead of importing loadVideo, this file exposes
- *      setOnEndedCallback(fn) / setOnDurationCallback(fn), which
- *      playlist.js registers during its own init. Loop-one restart
- *      needs no callback at all — this file just seeks back to 0 and
- *      plays, since that's pure media control.
- *
- *   2. Keeping the play/pause icon, spinner, and auto-hide timer in
- *      sync while a YouTube video is active — all controls.js's
- *      concerns — is done by dispatching synthetic 'play' / 'playing' /
- *      'pause' / 'waiting' events on the real <video> element from
- *      onYtStateChange(). controls.js already listens for exactly
- *      those events on that element for the native-video case; this
- *      just reuses that same listener for the YouTube case too,
- *      without either file needing to import the other.
- *
- * Resume-on-load ("remember where you left off on saved links") is
- * fully self-contained here: the position storage, the save-on-pause/
- * timeupdate/beforeunload wiring, and applying a saved position when a
- * link is (re)loaded all live in this one file, since it's really one
- * feature — "remember and restore media position" — regardless of
- * which element is actually playing.
- *
- * Exports:
- *   initMedia()                 — wires the 'ended' listener and the
- *                                 resume-position auto-save listeners.
- *   loadMediaItem(item, autoplay) — loads a playlist item (direct video
- *                                 or YouTube) into whichever element
- *                                 fits, applying a saved resume position
- *                                 when appropriate. Called by
- *                                 playlist.js's loadVideo().
- *   saveCurrentPosition()       — force-saves the position of whatever
- *                                 is playing right now. playlist.js
- *                                 calls this itself, before switching
- *                                 state.currentIndex to a new item, to
- *                                 capture the outgoing item's position.
- *   setOnEndedCallback(fn)      — fn() is called when playback ends and
- *                                 loop-one is off (playlist.js supplies
- *                                 "advance to next item").
- *   setOnDurationCallback(fn)   — fn() is called whenever this file
- *                                 learns a YouTube item's duration
- *                                 (playlist.js supplies "re-render the
- *                                 playlist list"; the native-video case
- *                                 doesn't need this — playlist.js listens
- *                                 for the real <video> element's own
- *                                 'loadedmetadata' event directly).
- *   isCurrentYouTube()
- *   mediaPlay() / mediaPause() / mediaSeek(t)
- *   mediaDuration() / mediaCurrentTime() / isPausedNow()
- *   mediaSetVolume(vol) / mediaSetMuted(muted) / mediaSetPlaybackRate(rate)
- *     — mirror a value already set canonically on the real <video>
- *       element onto the YouTube player, when one is active. Volume,
- *       mute, and playback rate stay canonical on <video> exactly as
- *       in the original single-file version; these three exist only
- *       for the mirroring, not as the source of truth.
- *
- * Known limitation carried over from the original design: buffered-
- * range display on the progress bar only reflects the real <video>
- * element — YouTube's own buffered fraction isn't surfaced here.
- */
+/* media.js: native video / YouTube playback abstraction */
+
 import { state, video, thumbVideo, tooltipCanvas, playerWrapper, durTimeEl, showToast, fmtTime } from './core.js';
 
 let ytPlayer = null;
 let ytApiReady = false;
 let ytApiLoading = false;
-let pendingYtLoad = null; // {videoId, autoplay}
+let pendingYtLoad = null;
 let onEndedCallback = null;
 let onDurationCallback = null;
 
-/* ============================================================
-   Core abstraction
-   ============================================================ */
 export function isCurrentYouTube() {
   const item = state.playlist[state.currentIndex];
   return !!(item && item.type === 'youtube');
@@ -120,7 +37,7 @@ export function mediaPause() {
 export function isPausedNow() {
   if (isCurrentYouTube()) {
     if (!ytPlayer || !ytPlayer.getPlayerState) return true;
-    return ytPlayer.getPlayerState() !== 1; // 1 = YT.PlayerState.PLAYING
+    return ytPlayer.getPlayerState() !== 1;
   }
   return video.paused;
 }
@@ -137,15 +54,9 @@ export function mediaSetPlaybackRate(rate) {
   if (isCurrentYouTube() && ytPlayer && ytPlayer.setPlaybackRate) ytPlayer.setPlaybackRate(rate);
 }
 
-/* ============================================================
-   Ended-playback callbacks (see file header)
-   ============================================================ */
 export function setOnEndedCallback(fn) { onEndedCallback = fn; }
 export function setOnDurationCallback(fn) { onDurationCallback = fn; }
 
-/* ============================================================
-   Resume-on-load position storage (localStorage, per URL)
-   ============================================================ */
 function loadPositions() {
   try {
     const raw = localStorage.getItem('lvp_positions');
@@ -178,14 +89,7 @@ export function saveCurrentPosition() {
   maybeSaveCurrentPosition(true);
 }
 
-/* ============================================================
-   Loading a playlist item (direct video or YouTube)
-   ============================================================ */
 export function loadMediaItem(item, autoplay) {
-  // A/B loop points are per-video. Dispatched before either branch below
-  // runs, so controls.js (which owns A/B loop state) can clear them by
-  // listening on this event itself, rather than this file — or
-  // playlist.js, which calls this function — importing controls.js.
   video.dispatchEvent(new CustomEvent('lvp:itemloading'));
 
   if (item.type === 'youtube') {
@@ -231,15 +135,12 @@ export function loadMediaItem(item, autoplay) {
   }
 }
 
-/* ============================================================
-   YouTube IFrame API
-   ============================================================ */
 function setYtIframeVisible(visible) {
   if (!ytPlayer || !ytPlayer.getIframe) return;
   try {
     const frame = ytPlayer.getIframe();
     if (frame) frame.style.display = visible ? 'block' : 'none';
-  } catch (err) { /* ignore */ }
+  } catch (err) {  }
 }
 
 function loadYouTubeAPI() {
@@ -266,10 +167,6 @@ function createYtPlayer(videoId, autoplay) {
     setYtIframeVisible(true);
     return;
   }
-  // Pass the id of a never-replaced inner target div, not the stable
-  // #youtubePlayerContainer wrapper itself — the YouTube IFrame API
-  // replaces whatever element it's given with an <iframe> and doesn't
-  // reliably preserve that element's id on the replacement.
   ytPlayer = new window.YT.Player('ytPlayerTarget', {
     videoId: videoId,
     playerVars: {
@@ -294,11 +191,6 @@ function onYtReady(e) {
     const frame = e.target.getIframe();
     if (frame) {
       frame.style.cssText = 'width:100%;height:100%;border:none;display:block;';
-      // The YT IFrame API grants this iframe "picture-in-picture"
-      // permission by default, which lets Chromium browsers auto-pop
-      // their own native miniplayer overlay for the video inside it.
-      // Stripping it from the allow list blocks that browser-level
-      // auto-PiP (our own PiP button is already disabled for YouTube).
       const allow = frame.getAttribute('allow') || '';
       frame.setAttribute('allow', allow.split(';').map(s => s.trim()).filter(s => s && !s.startsWith('picture-in-picture')).join('; '));
     }
@@ -330,9 +222,6 @@ function onYtReady(e) {
 function onYtStateChange(e) {
   const St = window.YT.PlayerState;
   if (e.data === St.PLAYING) {
-    // Reuses controls.js's existing native <video> 'play'/'playing'
-    // listeners (icon flip, spinner, auto-hide timer) instead of this
-    // file importing controls.js to call them directly.
     video.dispatchEvent(new Event('play'));
     video.dispatchEvent(new Event('playing'));
   } else if (e.data === St.PAUSED) {
@@ -349,9 +238,6 @@ function onYtStateChange(e) {
   }
 }
 
-/* ============================================================
-   Init
-   ============================================================ */
 export function initMedia() {
   video.addEventListener('ended', () => {
     if (state.loopOne) { video.currentTime = 0; video.play().catch(() => {}); }

@@ -1,56 +1,18 @@
-/*!
- * main.js
- * Entry point for the Local Video Player. This is the only file
- * index.html links from src/:
- *   <script type="module" src="src/main.js"></script>
- *
- * Responsibilities that don't belong to any single feature module:
- *   - Booting every module (core.js needs no init; the rest do).
- *   - Document-level drag & drop of video files.
- *   - The global keyboard-shortcut handler.
- *   - The keyboard-shortcuts help overlay (built here, since nothing
- *     else needs the shortcut list).
- *
- * Depends on (one-directional imports — main.js is the top of the
- * dependency graph, nothing else imports from main.js):
- *
- *   from './core.js':
- *     state, video, dropZone, fileInput, openBtn, settingsMenu,
- *     shortcutsOverlay, shortcutsGrid, shortcutsCloseBtn, loopBtn, ICONS
- *
- *   from './media.js':
- *     initMedia(), mediaSeek(t), mediaDuration(), isPausedNow()
- *
- *   from './controls.js':
- *     initControls(), togglePlay(), flashCenterIcon(iconSvg),
- *     seekBy(delta), flashSeek(direction, seconds), seekToRatio(ratio),
- *     cycleSpeed(dir), stepFrame(dir), adjustVolume(delta),
- *     toggleMute(), toggleFullscreen(), toggleTheater(), togglePip(),
- *     toggleManualHide(), togglePlaylistPanel(),
- *     beginFastForward(), endFastForward()
- *
- *   from './playlist.js':
- *     initPlaylist(), handleFiles(fileList), loadVideo(index, autoplay),
- *     closeUrlModal()
- *
- *   from './study-timer.js':
- *     initStudyTimer()
- */
-import { state, video, dropZone, fileInput, openBtn, settingsMenu,
+/* main.js: entry point, home/landing mode, drag & drop of files, keyboard shortcuts */
+
+import { state, video, dropZone, fileInput, openBtn, homeBtn, resumeBtn, playerWrapper, playlistPanel, settingsMenu,
          shortcutsOverlay, shortcutsGrid, shortcutsCloseBtn, loopBtn, ICONS } from './core.js';
-import { initMedia, mediaSeek, mediaDuration, isPausedNow } from './media.js';
+import { initMedia, mediaSeek, mediaDuration, mediaPause, isPausedNow } from './media.js';
 import {
   initControls, togglePlay, flashCenterIcon, seekBy, flashSeek, seekToRatio,
   cycleSpeed, stepFrame, adjustVolume, toggleMute, toggleFullscreen,
   toggleTheater, togglePip, toggleManualHide, togglePlaylistPanel,
   beginFastForward, endFastForward
 } from './controls.js';
-import { initPlaylist, handleFiles, loadVideo, closeUrlModal } from './playlist.js';
+import { initPlaylist, handleFiles, loadVideo, closeUrlModal, renderLandingSaved } from './playlist.js';
 import { initStudyTimer } from './study-timer.js';
+import { initInstall } from './install.js';
 
-/* ============================================================
-   Keyboard-shortcuts help overlay
-   ============================================================ */
 const SHORTCUTS = [
   ['Space / K', 'Play / pause'],
   ['Hold Space', 'Fast-forward at 2x while held'],
@@ -84,9 +46,40 @@ function buildShortcutsOverlay() {
   shortcutsCloseBtn.addEventListener('click', () => shortcutsOverlay.classList.add('hidden'));
 }
 
-/* ============================================================
-   Drag & drop
-   ============================================================ */
+let courseSidebarWasOpen = false;
+
+function goHome() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (state.currentIndex !== -1) mediaPause();
+  const courseSidebar = document.getElementById('cfSidebar');
+  courseSidebarWasOpen = !!(courseSidebar && !courseSidebar.classList.contains('hidden'));
+  if (courseSidebar) courseSidebar.classList.add('hidden');
+  playerWrapper.classList.add('hidden');
+  playlistPanel.classList.add('hidden');
+  shortcutsOverlay.classList.add('hidden');
+  settingsMenu.classList.add('hidden');
+  dropZone.classList.remove('hidden');
+  resumeBtn.hidden = state.playlist.length === 0;
+  renderLandingSaved();
+  document.title = 'Local Video Player';
+}
+
+function backToPlayer() {
+  if (state.playlist.length === 0) return;
+  dropZone.classList.add('hidden');
+  playerWrapper.classList.remove('hidden');
+  playlistPanel.classList.toggle('hidden', !state.playlistOpen);
+  const courseSidebar = document.getElementById('cfSidebar');
+  if (courseSidebar && courseSidebarWasOpen) courseSidebar.classList.remove('hidden');
+  const item = state.playlist[state.currentIndex];
+  if (item) document.title = item.name + ' \u2014 Local Video Player';
+}
+
+function wireHome() {
+  homeBtn.addEventListener('click', goHome);
+  resumeBtn.addEventListener('click', backToPlayer);
+}
+
 function wireDragDrop() {
   openBtn.addEventListener('click', () => fileInput.click());
 
@@ -108,9 +101,6 @@ function wireDragDrop() {
   });
 }
 
-/* ============================================================
-   Global keyboard shortcuts
-   ============================================================ */
 function togglePlayWithFlash() {
   togglePlay();
   flashCenterIcon(isPausedNow() ? ICONS.play : ICONS.pause);
@@ -119,6 +109,7 @@ function togglePlayWithFlash() {
 function wireKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {
     if (state.currentIndex === -1 && e.key !== '?') return;
+    if (!dropZone.classList.contains('hidden') && e.key !== '?') return;
     const tag = document.activeElement.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
@@ -220,13 +211,12 @@ function wireKeyboardShortcuts() {
   });
 }
 
-/* ============================================================
-   Boot
-   ============================================================ */
 buildShortcutsOverlay();
+wireHome();
 wireDragDrop();
 wireKeyboardShortcuts();
 initMedia();
 initControls();
 initPlaylist();
 initStudyTimer();
+initInstall();

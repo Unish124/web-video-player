@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Local Video Player</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f0f0f">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/player.css">
 </head>
 <body>
@@ -16,6 +20,11 @@
       <svg viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zm1 2v9h14V8H5zm5.5 1.8 4.7 3-4.7 3v-6z"/></svg>
       <h1>Local Video Player</h1>
       <p>Drag &amp; drop video files anywhere on this page</p>
+      <button id="resumeBtn" class="resume-btn" type="button" hidden>&#9654; Back to player</button>
+      <div class="saved-landing" id="savedLanding" hidden>
+        <div class="saved-landing-title">Your saved videos</div>
+        <div class="saved-landing-list"></div>
+      </div>
       <button id="openBtn">Open video files</button>
       <div class="or-divider">or</div>
       <div class="url-row">
@@ -24,6 +33,10 @@
       </div>
       <div class="url-error" id="urlError"></div>
       <p class="hint">Everything plays locally in your browser — nothing is uploaded. Paste a YouTube link and it's auto-detected and embedded with YouTube's own player; other links must be direct video files (.mp4, .webm…).</p>
+    </div>
+    <div class="drop-footer" id="dropFooter">
+      <button type="button" class="drop-footer-link" id="defaultPlayerBtn">Set as default video player</button>
+      <a class="drop-footer-link" href="guide.html" target="_blank" rel="noopener">Shortcut guide</a>
     </div>
   </div>
 
@@ -55,6 +68,9 @@
     <div class="spinner" id="spinner"></div>
 
     <div class="top-bar" id="topBar">
+      <button class="icon-btn" id="homeBtn" title="Home">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      </button>
       <button class="icon-btn" id="playlistToggleBtn" title="Show/hide playlist (P)">
         <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h10v2H4z"/></svg>
       </button>
@@ -74,6 +90,7 @@
       <div class="shortcuts-card">
         <h2>Keyboard shortcuts</h2>
         <div class="shortcuts-grid" id="shortcutsGrid"></div>
+        <a class="shortcuts-guide-link" href="guide.html" target="_blank" rel="noopener">Open the full shortcut guide</a>
         <button class="shortcuts-close" id="shortcutsCloseBtn">Close</button>
       </div>
     </div>
@@ -132,17 +149,6 @@
             <button class="icon-btn small" id="settingsBtn" title="Settings">
               <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.1 7.1 0 0 0 .06-.94 7.1 7.1 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.6.24-1.15.56-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.62-.06.94s.02.64.06.94L2.82 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.48.38 1.03.7 1.63.94l.36 2.54c.05.24.26.42.5.42h3.84c.24 0 .45-.18.5-.42l.36-2.54c.6-.24 1.15-.56 1.63-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
             </button>
-            <!--
-              Two-level "main list -> submenu" settings menu (see
-              controls.js's showSettingsPanel()/wireSettingsNavigation()).
-              Only one .settings-panel has the .active class at a time.
-              Each main-panel row's data-target names the submenu panel
-              id it opens; each submenu's header's data-back returns to
-              settingsMainPanel. playback-enhancements' duration.js
-              appends its "Video & playlist lengths" toggle into
-              settingsMainPanel, and speed.js appends its custom-speed
-              slider into settingsSpeedPanel (after the native presets).
-            -->
             <div class="settings-menu hidden" id="settingsMenu">
 
               <div class="settings-panel active" id="settingsMainPanel">
@@ -294,7 +300,37 @@
           <button id="resetControlVisibilityBtn" class="control-reset-btn" type="button">Show all controls</button>
         </div>
       </div>
+      <div class="control-toggles-section">
+        <div class="feature-name">Default video player</div>
+        <div class="feature-desc" style="margin-bottom:10px;">Install this player as an app so videos on your laptop open here.</div>
+        <button id="defaultPlayerFeatureBtn" class="control-reset-btn" type="button">Set as default player</button>
+      </div>
       <button class="shortcuts-close" id="featuresCloseBtn" style="margin-top:16px;">Close</button>
+    </div>
+  </div>
+
+  <div class="shortcuts-overlay hidden" id="defaultPlayerOverlay">
+    <div class="shortcuts-card dp-card">
+      <h2>Set as default video player</h2>
+      <p class="dp-intro">Install this site as an app, then choose it for video files. After that, opening any video on your laptop plays it in videoplayer.unish.info.np.</p>
+      <ol class="dp-steps">
+        <li>
+          <div class="dp-step-title">Install the app</div>
+          <button type="button" id="dpInstallBtn" class="dp-btn" disabled>Install app</button>
+          <div class="dp-status" id="dpStatus"></div>
+        </li>
+        <li>
+          <div class="dp-step-title">Pick it for a video</div>
+          <div class="dp-step-text">Right-click any video file, choose <b>Open with</b>, then <b>Choose another app</b>, select <b>Local Video Player</b>, tick <b>Always use this app</b> and press OK.</div>
+        </li>
+        <li>
+          <div class="dp-step-title">Or set it for every video type</div>
+          <div class="dp-step-text">Open Windows <b>Settings</b>, <b>Apps</b>, <b>Default apps</b>, search for <b>.mp4</b> and choose Local Video Player. Repeat for .mkv, .webm, .mov, .avi and .m4v.</div>
+          <a class="dp-btn dp-link" href="ms-settings:defaultapps">Open Windows default apps</a>
+        </li>
+      </ol>
+      <p class="dp-note">Works with Chrome or Edge on Windows. Windows needs you to confirm the choice yourself, so a website cannot change your defaults silently. <a href="guide.html#default-player" target="_blank" rel="noopener">More details</a></p>
+      <button class="shortcuts-close" id="dpCloseBtn">Close</button>
     </div>
   </div>
 
@@ -356,4 +392,4 @@
   <script src="course-feature.js"></script>
   <script type="module" src="playback-enhancements/index.js"></script>
 </body>
-</html> 
+</html>
