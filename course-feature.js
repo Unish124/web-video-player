@@ -1,27 +1,8 @@
-/*!
- * course-feature.js
- * Adds "Open Course Folder" support to the existing Local Video Player
- * (mainstable.html) WITHOUT modifying or duplicating its player logic.
- *
- * Integration strategy (see README block at bottom of this file for details):
- *  - Video files are handed to the EXISTING #fileInput via a DataTransfer,
- *    so they flow through the app's own handleFiles()/loadVideo()/state.
- *  - "Playing" a lesson = clicking the matching native <li class="playlist-item">.
- *  - A MutationObserver on #playlistItems keeps this module in sync with
- *    whatever the native player is doing (native Prev/Next, keyboard
- *    shortcuts, autoplay-to-next-video, manual clicks in the native list).
- *  - Text/markdown/code/csv/html files are previewed in a small viewer
- *    this module creates itself (the native app has no file for that).
- *
- * Namespaced under `CourseFeature` — no existing globals, IDs, classes,
- * or event listeners are touched or overwritten.
- */
+/* course-feature.js: "Open folder" course sidebar, lesson tree, progress and document viewer */
+
 const CourseFeature = (() => {
   'use strict';
 
-  /* ============================================================
-     0. References into the existing app (read-only DOM access)
-     ============================================================ */
   const nativeApp            = document.getElementById('app');
   const nativeVideo          = document.getElementById('video');
   const nativeFileInput      = document.getElementById('fileInput');
@@ -37,9 +18,6 @@ const CourseFeature = (() => {
     return { init(){} };
   }
 
-  /* ============================================================
-     1. Small helpers (own copies — do not reuse native internals)
-     ============================================================ */
   const VIDEO_EXT_RE = /\.(mkv|mov|avi|webm|mp4|m4v|ogv)$/i;
   const TEXT_EXTS = ['txt', 'md', 'markdown', 'html', 'htm', 'css', 'js', 'mjs', 'json', 'xml', 'csv'];
 
@@ -89,26 +67,20 @@ const CourseFeature = (() => {
     return (h >>> 0).toString(16);
   }
 
-  /* ============================================================
-     2. Module state
-     ============================================================ */
-  let courseTree = null;          // recursive tree { type:'folder', items:[...] }
-  let flatLessons = [];           // DFS-flattened leaf files, natural-sorted
-  let lessonsById = new Map();    // id (relative path) -> lesson node
-  let nativeIndexToLesson = new Map(); // native playlist index -> lesson node
-  let expandedPaths = new Set();  // folder paths currently expanded
+  let courseTree = null;
+  let flatLessons = [];
+  let lessonsById = new Map();
+  let nativeIndexToLesson = new Map();
+  let expandedPaths = new Set();
   let searchQuery = '';
   let courseId = null;
   let courseTitle = 'Course';
-  let courseState = null;         // persisted progress object for this course
+  let courseState = null;
   let currentLessonId = null;
-  let lessonGeneration = 0;       // invalidates stale "resume seek" callbacks
+  let lessonGeneration = 0;
   let lastPosSaveTs = 0;
   let currentDocObjectUrl = null;
 
-  /* ============================================================
-     3. Recursive folder-tree building
-     ============================================================ */
   function buildTreeFromFiles(files) {
     const root = { type: 'folder', name: '', path: '', childMap: new Map(), items: null };
     files.forEach(file => {
@@ -155,10 +127,6 @@ const CourseFeature = (() => {
     return 'course_' + hashString(sig) + '_' + files.length;
   }
 
-  /* ============================================================
-     4. Persistence (localStorage — namespaced keys, no collisions
-        with the native app's lvp_* keys)
-     ============================================================ */
   const CF_STORAGE_KEY = 'cf_courses_v1';
   function readAllCourseStates() {
     try {
@@ -190,12 +158,6 @@ const CourseFeature = (() => {
     writeAllCourseStates(all);
   }
 
-  /* ============================================================
-     5. Feeding videos into the EXISTING player via #fileInput
-     ============================================================ */
-  // insertAt (optional): playlist index to insert the videos at instead
-  // of appending. The native player reads it from the file input's
-  // data-insert-at attribute while handling the 'change' event below.
   function importVideosIntoNativePlayer(videoLessons, insertAt) {
     if (!videoLessons.length) return;
     if (typeof DataTransfer === 'undefined') {
@@ -214,44 +176,16 @@ const CourseFeature = (() => {
     } finally {
       delete nativeFileInput.dataset.insertAt;
     }
-    // Build the index map right away (synchronously) so goToLesson() —
-    // called immediately after this, e.g. for the initial resume lesson
-    // — has correct nativeIndex values without waiting for the
-    // MutationObserver's own (asynchronous) rebuild below.
     buildNativeIndexMap();
   }
 
-  // Recomputes which of OUR lessons corresponds to which currently-
-  // visible native playlist row, by matching each row's displayed file
-  // name against our lesson names — NOT by a fixed position. A fixed
-  // index captured once at import time goes stale the moment the native
-  // playlist's order changes underneath it, which now happens two ways
-  // this module has no control over: the native player's own
-  // drag-and-drop reordering, and removing an item (which shifts every
-  // later index down by one). Rows that don't match any of our lessons
-  // (e.g. videos from a different, previously-imported course sitting
-  // in the same native playlist) are simply left unmapped.
   function buildNativeIndexMap() {
     nativeIndexToLesson = new Map();
     const videoLessons = flatLessons.filter(l => l.kind === 'video');
     if (!videoLessons.length) return;
 
-    // Reset every lesson's index BEFORE re-matching. Without this, a
-    // lesson whose native row was removed (e.g. via the playlist's ✕
-    // button) would keep its old, now-stale nativeIndex forever, since
-    // the matching loop below only ever SETS an index for lessons it
-    // successfully finds — it never clears one for lessons it doesn't.
-    // That stale index would then point at whatever row happens to have
-    // shifted into that position, which is how "click lesson 5, video 6
-    // plays instead" happens. Resetting to null first means a lesson
-    // that isn't found ends up with nativeIndex === null, which
-    // goToLesson() uses to detect "this video isn't in the playlist
-    // right now" and offer to restore it.
     videoLessons.forEach(l => { l.nativeIndex = null; });
 
-    // Group by display name (usually one lesson per name, but two
-    // lessons in different folders can share a file name) so repeats
-    // pair up in the same relative order on both sides.
     const byName = new Map();
     videoLessons.forEach(l => {
       if (!byName.has(l.name)) byName.set(l.name, []);
@@ -269,29 +203,19 @@ const CourseFeature = (() => {
       const name = rowNames[idx];
       if (name == null) return;
       const candidates = byName.get(name);
-      if (!candidates || !candidates.length) return; // not one of this course's lessons
+      if (!candidates || !candidates.length) return;
       const n = claimedCount.get(name) || 0;
-      if (n >= candidates.length) return; // more native rows with this name than lessons for it
+      if (n >= candidates.length) return;
       const lesson = candidates[n];
       claimedCount.set(name, n + 1);
       lesson.nativeIndex = idx;
       nativeIndexToLesson.set(idx, lesson);
-      // Remember where this lesson sits (and who its neighbours are)
-      // every time it's seen in the playlist. Once it's removed these
-      // stop updating, so they keep describing its LAST position — which
-      // is what computeRestoreIndex() uses to put it back in place.
       lesson.lastNativeIndex = idx;
       lesson.prevName = idx > 0 ? rowNames[idx - 1] : null;
       lesson.nextName = idx < rowNames.length - 1 ? rowNames[idx + 1] : null;
     });
   }
 
-  // Where to re-insert a removed lesson so it lands back where it was.
-  // Prefer the neighbour that used to be right before it (insert after
-  // it), then the one right after it (insert before it) — that stays
-  // correct even if OTHER items were removed or moved in the meantime,
-  // which a plain remembered index would not. Falls back to the old
-  // index, then to null (= append) if nothing is known.
   function computeRestoreIndex(lesson) {
     const rows = Array.from(nativePlaylistItems.children);
     const names = rows.map(r => {
@@ -310,14 +234,8 @@ const CourseFeature = (() => {
     return null;
   }
 
-  /* ============================================================
-     6. Staying in sync with the native player
-     ============================================================ */
   function observeNativePlayer() {
     const obs = new MutationObserver(() => {
-      // Any DOM change to the native list — a full rebuild, a
-      // reorder, or the '.playing' class moving — means the name-based
-      // mapping needs recomputing before we trust it.
       buildNativeIndexMap();
       syncFromNativePlaylist();
     });
@@ -330,12 +248,6 @@ const CourseFeature = (() => {
     const idx = items.findIndex(li => li.classList.contains('playing'));
     if (idx === -1) return;
     const lesson = nativeIndexToLesson.get(idx);
-    // If the currently-playing native row isn't one of this course's
-    // lessons at all (e.g. the person clicked a video left over from a
-    // different, previously-imported course), newLessonId ends up null
-    // — which correctly clears any stale highlight in the sidebar
-    // instead of leaving the last-matched lesson looking "active" while
-    // something unrelated actually plays.
     const newLessonId = lesson ? lesson.id : null;
     if (newLessonId !== currentLessonId) {
       hideDocViewer();
@@ -367,9 +279,6 @@ const CourseFeature = (() => {
     }
   }
 
-  /* ============================================================
-     7. Navigation
-     ============================================================ */
   function activateVideoResume(lesson) {
     lessonGeneration++;
     const myGen = lessonGeneration;
@@ -388,15 +297,9 @@ const CourseFeature = (() => {
     if (!lesson) return;
     if (lesson.kind === 'video') {
       if (lesson.nativeIndex == null) {
-        // This lesson's video isn't currently among the native "Now
-        // Playing" rows — almost always because the person removed it
-        // there with the playlist's ✕ button. Confirm before silently
-        // re-adding it, rather than failing outright or (the bug this
-        // fixes) ending up playing whatever unrelated video happens to
-        // now sit at a stale leftover index.
         const restore = confirm(`"${lesson.name}" isn't in the playlist right now (it may have been removed). Restore it and play it?`);
         if (!restore) return;
-        importVideosIntoNativePlayer([lesson], computeRestoreIndex(lesson)); // re-adds the file at its old spot; rebuilds the index map synchronously
+        importVideosIntoNativePlayer([lesson], computeRestoreIndex(lesson));
         if (lesson.nativeIndex == null) {
           showToastCF('This video could not be restored to the playlist.');
           return;
@@ -406,8 +309,8 @@ const CourseFeature = (() => {
       if (!li) { showToastCF('This video could not be loaded into the player.'); return; }
       hideDocViewer();
       activateVideoResume(lesson);
-      li.click(); // native loadVideo() runs exactly as if the user clicked it
-      currentLessonId = id; // optimistic; MutationObserver reconciles if needed
+      li.click();
+      currentLessonId = id;
     } else {
       try { nativeVideo.pause(); } catch (e) {}
       nativeDropZone.classList.add('hidden');
@@ -418,12 +321,6 @@ const CourseFeature = (() => {
     afterLessonChanged();
   }
   function afterLessonChanged() {
-    // Only persist a resume point when a lesson from THIS course is
-    // actually active. If currentLessonId just went null (the person
-    // played something unrelated in the native playlist), we still want
-    // to update the sidebar highlight to reflect that — but we don't
-    // want to clobber the saved "resume from here" position with
-    // nothing in the process.
     if (courseState && currentLessonId) {
       courseState.currentLessonId = currentLessonId;
       persistCourseState();
@@ -449,9 +346,6 @@ const CourseFeature = (() => {
     });
   }
 
-  /* ============================================================
-     8. Document / text viewer (overlaid on the existing player)
-     ============================================================ */
   function splitCsvLine(line) {
     const out = []; let cur = '', inQuotes = false;
     for (let i = 0; i < line.length; i++) {
@@ -522,7 +416,7 @@ const CourseFeature = (() => {
         cfDocBody.innerHTML = '';
         const iframe = document.createElement('iframe');
         iframe.className = 'cf-doc-iframe';
-        iframe.setAttribute('sandbox', ''); // no scripts, no same-origin
+        iframe.setAttribute('sandbox', '');
         cfDocBody.appendChild(iframe);
         iframe.srcdoc = text;
       } else if (ext === 'md' || ext === 'markdown') {
@@ -545,9 +439,6 @@ const CourseFeature = (() => {
     if (currentDocObjectUrl) { URL.revokeObjectURL(currentDocObjectUrl); currentDocObjectUrl = null; }
   }
 
-  /* ============================================================
-     9. Sidebar rendering (recursive — no assumed nesting depth)
-     ============================================================ */
   function nodeMatchesSearch(node) {
     if (!searchQuery) return true;
     if (node.type === 'file') return node.name.toLowerCase().includes(searchQuery);
@@ -612,9 +503,6 @@ const CourseFeature = (() => {
     cfMarkBtn.disabled = !currentLessonId;
   }
 
-  /* ============================================================
-     10. Import flow
-     ============================================================ */
   function importCourseFolder(fileList) {
     const files = Array.from(fileList).filter(f => f.name);
     if (!files.length) { showToastCF('No files found in that folder.'); return; }
@@ -633,14 +521,6 @@ const CourseFeature = (() => {
     nativeIndexToLesson = new Map();
     courseTree = treeRoot;
     courseTitle = title;
-    // Start with every folder collapsed. Previously this pre-populated
-    // expandedPaths with EVERY folder path in the tree (via
-    // collectAllFolderPaths), so a course with several nested subfolders
-    // dumped its entire file tree open on load. Top-level items are
-    // already visible without any expansion (they're the tree's first
-    // level, rendered unconditionally by renderSidebarTree/renderTreeLevel)
-    // — clicking a folder row now reveals only its own direct children,
-    // and any subfolders inside those stay collapsed until clicked too.
     expandedPaths = new Set();
     searchQuery = '';
     cfSearchInput.value = '';
@@ -653,15 +533,6 @@ const CourseFeature = (() => {
 
     cfCourseTitle.textContent = title;
 
-    // Build the tree/progress/nav content FIRST, while the sidebar is still
-    // collapsed (width:0, overflow:hidden) and invisible. Only once that's
-    // done do we reveal it — mirrors playlist.js's handleFiles(), which
-    // calls renderPlaylist() before playlistPanel.classList.remove('hidden').
-    // Doing it the other way around (reveal, then build) forces the heavy
-    // tree-building layout work to happen DURING the width transition,
-    // which is what caused the animation to look janky/instant instead of
-    // a smooth slide, and stole frames from the playlist panel's own
-    // transition happening around the same time.
     renderSidebarTree();
     renderProgress();
     updateNavButtons();
@@ -678,16 +549,11 @@ const CourseFeature = (() => {
     showToastCF(`Loaded "${title}" \u2014 ${flatLessons.length} lesson${flatLessons.length !== 1 ? 's' : ''}`);
   }
 
-  /* ============================================================
-     11. UI shell (sidebar, doc viewer, buttons) — built entirely
-         in JS so mainstable.html needs no HTML changes.
-     ============================================================ */
   let cfFolderInput, cfSidebar, cfCourseTitle, cfProgressFill, cfProgressPct, cfProgressText,
       cfSearchInput, cfTreeContainer, cfPrevBtn, cfMarkBtn, cfNextBtn,
       cfDocViewer, cfDocTitle, cfDocBody, cfTopBtn;
 
   function buildUIShell() {
-    // Hidden folder-picker input
     cfFolderInput = document.createElement('input');
     cfFolderInput.type = 'file';
     cfFolderInput.id = 'cfFolderInput';
@@ -702,7 +568,6 @@ const CourseFeature = (() => {
     });
     document.body.appendChild(cfFolderInput);
 
-    // "Open a course folder" entry point on the drop-zone (pre-video state)
     const dropInner = document.querySelector('.drop-inner');
     if (dropInner) {
       const divider = document.createElement('div');
@@ -712,13 +577,12 @@ const CourseFeature = (() => {
       btn.type = 'button';
       btn.id = 'cfOpenFolderBtnDrop';
       btn.className = 'cf-open-folder-btn';
-      btn.textContent = '\uD83D\uDCC2 Open a course folder';
+      btn.textContent = '\uD83D\uDCC2 Open folder';
       btn.addEventListener('click', () => cfFolderInput.click());
       dropInner.appendChild(divider);
       dropInner.appendChild(btn);
     }
 
-    // Persistent top-bar entry point
     if (nativeTopBar) {
       cfTopBtn = document.createElement('button');
       cfTopBtn.type = 'button';
@@ -733,7 +597,6 @@ const CourseFeature = (() => {
       nativeTopBar.appendChild(cfTopBtn);
     }
 
-    // Sidebar panel
     cfSidebar = document.createElement('div');
     cfSidebar.id = 'cfSidebar';
     cfSidebar.className = 'cf-sidebar hidden';
@@ -783,7 +646,6 @@ const CourseFeature = (() => {
       markLessonComplete(currentLessonId, !courseState.completed[currentLessonId]);
     });
 
-    // Document viewer, overlaid on the existing player area
     cfDocViewer = document.createElement('div');
     cfDocViewer.id = 'cfDocViewer';
     cfDocViewer.className = 'cf-doc-viewer hidden';
@@ -798,21 +660,6 @@ const CourseFeature = (() => {
     cfDocBody  = cfDocViewer.querySelector('#cfDocBody');
   }
 
-  /* ============================================================
-     12. Injected CSS (scoped to cf- prefixed classes; reuses the
-         host app's existing CSS custom properties for theming)
-
-     Sidebar open/close animation:
-     .cf-sidebar previously toggled with a hard `display:none`, which
-     can't be transitioned — so it opened/closed instantly with no
-     animation, unlike the native `.playlist-panel` (in player.css),
-     which slides by animating `width`/`opacity`/`border-color` and
-     using `overflow:hidden` instead of `display:none` while hidden.
-     The rules below give `.cf-sidebar` that exact same treatment,
-     reusing the app's own --dur-slow/--dur-base/--ease-snap/
-     --ease-smooth custom properties so the motion matches the
-     playlist panel's timing and easing precisely.
-     ============================================================ */
   function injectStyles() {
     const style = document.createElement('style');
     style.id = 'cfStyles';
@@ -833,16 +680,6 @@ const CourseFeature = (() => {
                    border-color var(--dur-base,260ms) var(--ease-smooth,ease-out);
       }
       .cf-sidebar.hidden{ width:0; opacity:0; border-color:transparent; }
-      /* The OUTER .cf-sidebar above is what actually animates (width
-         0 -> 320px via overflow:hidden). Its real content lives in this
-         INNER box instead, at a constant 320px, so the lesson tree/rows
-         never need their text-overflow/ellipsis widths recalculated on
-         every animation frame — the browser just reveals more of an
-         already-laid-out box as the outer box grows, instead of
-         re-flowing potentially hundreds of rows 60 times a second. This
-         is what was still causing jank even after fixing the render
-         order — courses with many lessons cost far more per-frame layout
-         work than the native playlist typically has to do. */
       .cf-sidebar-inner{
         width:320px;height:100%;flex-shrink:0;
         display:flex;flex-direction:column;color:var(--text);
@@ -936,9 +773,6 @@ const CourseFeature = (() => {
     document.head.appendChild(style);
   }
 
-  /* ============================================================
-     13. Init
-     ============================================================ */
   function init() {
     injectStyles();
     buildUIShell();
@@ -956,30 +790,3 @@ const CourseFeature = (() => {
 
   return { init, importCourseFolder };
 })();
-
-/*
-README (integration notes)
----------------------------------------------------------------------------
-mainstable.html is untouched except for one <script src="course-feature.js">
-tag. Everything above runs as an isolated module (`CourseFeature`) and only
-interacts with the existing app through:
-
-  1. DOM reads/writes on elements that already exist (#video, #fileInput,
-     #playlistItems, #dropZone, #playerWrapper, #topBar, #toast) — the same
-     surface a real user interacts with.
-  2. Feeding File objects into the real #fileInput via DataTransfer + a
-     dispatched 'change' event, so the app's own handleFiles()/loadVideo()/
-     state.playlist logic (resume-on-refresh exclusions for local files,
-     duration display, native Prev/Next, keyboard shortcuts, etc.) all keep
-     working exactly as before — for course videos and for any videos the
-     user opens the normal way.
-  3. A MutationObserver on #playlistItems (watching for the '.playing'
-     class) so this module always knows which native video is active,
-     regardless of *how* the user navigated there.
-
-No existing function, id, class, or event listener is modified or removed.
-Text/markdown/html/css/js/json/xml/csv files never touch the native
-playlist at all — they're read with FileReader and shown in this module's
-own viewer, which is only overlaid on top of #playerWrapper while active.
----------------------------------------------------------------------------
-*/

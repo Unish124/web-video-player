@@ -1,59 +1,4 @@
-/*!
- * speed.js
- * Custom playback speed feature for playback-enhancements — a YouTube-
- * style slider panel (big readout, −/+ steppers, preset chips, and a
- * "pinned" chip for whatever custom value was last used) on top of the
- * native preset list already in the ⚙ settings menu's "Playback speed"
- * submenu.
- *
- * Exports a single function, initSpeed(deps), called once by index.js
- * after the DOM is ready. This file does NOT import anything from
- * index.js — that would create a circular import (index.js → speed.js
- * → index.js). Instead, everything it needs is handed to it as `deps`:
- *
- *   deps.nativeVideo         — the native <video id="video">
- *   deps.nativePlayerWrapper — the native <div id="playerWrapper">
- *   deps.nativeSpeedOptions  — the native <div id="speedOptions">
- *                              (the preset speed buttons already there)
- *   deps.nativeSettingsMenu  — the native <div id="settingsMenu">
- *   deps.nativeSpeedSubmenuPanel — the "Playback speed" submenu panel
- *                              (<div id="settingsSpeedPanel">), if the
- *                              drill-down settings menu markup is
- *                              present. This file's toggle + slider
- *                              block is appended here, right after the
- *                              native preset list, instead of directly
- *                              onto nativeSettingsMenu — so it lives
- *                              inside the speed submenu instead of
- *                              always being visible under every other
- *                              submenu too. Falls back to
- *                              nativeSettingsMenu if this isn't provided.
- *   deps.showToast(msg)      — shows a message in the native toast
- *   deps.isYouTubeActive()   — true while playerWrapper is in yt-mode
- *   deps.loadBoolPref(key, fallback)
- *   deps.saveBoolPref(key, value)
- *
- * CSS for the elements this file creates (.pe-speed-panel and its
- * children, .pe-chip, .pe-pin-flag, .pe-title-row) lives in index.js's
- * injectStyles() — shared with duration.js, not duplicated here.
- *
- * How it works:
- *   - Speed is applied by setting the real <video>.playbackRate, so the
- *     browser's own 'ratechange' event is how this file later detects
- *     "is a preset active, or is a custom value active?" — no access
- *     to the host page's internal JS variables is needed or used. That
- *     same 'ratechange' event is also how src/controls.js keeps the
- *     main settings panel's "Playback speed" row label in sync with
- *     whatever this file sets, without either file needing to import
- *     the other.
- *   - Whenever the active rate isn't one of the native presets, this
- *     file clears the native preset list's own .selected class itself
- *     (that list only updates .selected on its own clicks) so a stale
- *     preset never stays highlighted while a custom rate is playing.
- *   - Known limitation: YouTube-embedded links are controlled through
- *     the native script's own private YT.Player instance, which this
- *     file has no way to reach — custom speed only applies to local
- *     files and direct video-file URLs. A toast says so if you try.
- */
+/* playback-enhancements/speed.js: custom playback speed slider */
 
 const PRESET_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const RATE_EPSILON = 0.0005;
@@ -63,7 +8,6 @@ const SLIDER_STEP = 0.05;
 const NUDGE_STEP = 0.1;
 
 function fmtSpeedLabelPE(v) {
-  // Clean label: "1x", "1.25x", "0.4x" — no trailing zeros.
   return (Math.round(v * 100) / 100).toString() + 'x';
 }
 function isMatchingPreset(rate) {
@@ -81,10 +25,7 @@ export function initSpeed(deps) {
     loadBoolPref, saveBoolPref
   } = deps;
 
-  /* ============================================================
-     State
-     ============================================================ */
-  let speedPanelEnabled = loadBoolPref('pe_speedEnabled', false); // off by default, like the app's own "Extra features"
+  let speedPanelEnabled = loadBoolPref('pe_speedEnabled', false);
   let lastCustomSpeed = (function () {
     try {
       const v = parseFloat(localStorage.getItem('pe_lastCustomSpeed'));
@@ -95,9 +36,6 @@ export function initSpeed(deps) {
   let peSpeedPanel, peSpeedDisplay, peSpeedSlider, peSpeedChips,
       peSpeedToggleSwitch, peSpeedMinusBtn, peSpeedPlusBtn;
 
-  /* ============================================================
-     Applying speed + keeping the UI in sync
-     ============================================================ */
   function applySpeed(v, opts) {
     opts = opts || {};
     const clamped = clampSpeed(v);
@@ -106,7 +44,7 @@ export function initSpeed(deps) {
       showToast('Custom speed isn\u2019t available for YouTube videos');
       return;
     }
-    nativeVideo.playbackRate = clamped; // fires 'ratechange' → syncSpeedUI()
+    nativeVideo.playbackRate = clamped;
     if (!opts.silent) showToast(`${fmtSpeedLabelPE(clamped)} speed`);
   }
 
@@ -146,9 +84,6 @@ export function initSpeed(deps) {
   function syncSpeedUI() {
     const rate = nativeVideo.playbackRate;
 
-    // Keep the native preset list's own highlighting honest: it only
-    // updates .selected on its own clicks, so a custom rate set from
-    // here would otherwise leave a stale preset looking selected.
     if (!isMatchingPreset(rate)) {
       Array.from(nativeSpeedOptions.children).forEach(opt => opt.classList.remove('selected'));
       lastCustomSpeed = rate;
@@ -169,13 +104,6 @@ export function initSpeed(deps) {
     if (peSpeedToggleSwitch) peSpeedToggleSwitch.classList.toggle('on', speedPanelEnabled);
   }
 
-  /* ============================================================
-     UI: appended into the settings menu's "Playback speed" submenu
-     panel (nativeSpeedSubmenuPanel), right after the native preset
-     list already inside it — falling back to the flat
-     nativeSettingsMenu if that panel doesn't exist. Nothing existing
-     is edited — only new elements added.
-     ============================================================ */
   function buildSettingsSection() {
     const wrap = document.createElement('div');
     wrap.className = 'pe-settings-block';
@@ -205,8 +133,6 @@ export function initSpeed(deps) {
     peSpeedChips    = wrap.querySelector('#peSpeedChips');
     peSpeedToggleSwitch = wrap.querySelector('#peSpeedToggle');
 
-    // Prevent clicks inside this panel from bubbling to the document-
-    // level listener that closes the settings menu on any outside click.
     wrap.addEventListener('click', e => e.stopPropagation());
 
     peSpeedSlider.addEventListener('input', () => {
@@ -227,9 +153,6 @@ export function initSpeed(deps) {
     });
   }
 
-  /* ============================================================
-     Init
-     ============================================================ */
   buildSettingsSection();
   applySpeedPanelEnabled();
   syncSpeedUI();

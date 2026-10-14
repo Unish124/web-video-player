@@ -1,35 +1,13 @@
-/*!
- * core.js
- * The one file every other src/ module imports from. Has no imports of
- * its own — it's the leaf of the dependency graph:
- *
- *   core.js  <-  media.js  <-  controls.js, playlist.js, study-timer.js
- *                                        ^
- *                              (all of these also import core.js directly)
- *
- * Exports:
- *   state          — the shared mutable state object every module reads
- *                    and writes (playlist data, playback flags, feature
- *                    toggles, A/B loop points, study timer state, etc.)
- *   DOM refs        — one exported const per element this app touches,
- *                    looked up once by id at module load.
- *   ICONS           — the inline-SVG markup map for icon-button states.
- *   fmtTime(sec)    — "H:MM:SS" / "M:SS" formatter.
- *   showToast(msg)  — shows a message in the native toast element.
- *   uid()           — short random id, used for playlist item ids.
- *   escapeHtml(s)   — text-safe HTML-escaping for anything rendered via
- *                    innerHTML (playlist names, saved-link names, etc.)
- */
+/* core.js: DOM references, shared state and small helpers */
 
-/* ============================================================
-   DOM references
-   ============================================================ */
 const $ = id => document.getElementById(id);
 
 export const app                    = $('app');
 export const dropZone                = $('dropZone');
 export const fileInput               = $('fileInput');
 export const openBtn                 = $('openBtn');
+export const homeBtn                 = $('homeBtn');
+export const resumeBtn               = $('resumeBtn');
 export const playerWrapper           = $('playerWrapper');
 export const video                   = $('video');
 export const thumbVideo              = $('thumbVideo');
@@ -60,15 +38,10 @@ export const durTimeEl               = $('durTime');
 export const loopBtn                 = $('loopBtn');
 export const settingsBtn             = $('settingsBtn');
 export const settingsMenu            = $('settingsMenu');
-// Settings menu: drill-down panels (main list + one submenu per
-// category). Only one of these has the .active class at a time —
-// see controls.js's showSettingsPanel()/wireSettingsNavigation().
 export const settingsMainPanel       = $('settingsMainPanel');
 export const settingsSpeedPanel      = $('settingsSpeedPanel');
 export const settingsSkipPanel       = $('settingsSkipPanel');
 export const settingsBtnSizePanel    = $('settingsBtnSizePanel');
-// The "current value" labels shown next to each category row in the
-// main settings panel (e.g. "Normal", "10 seconds", "Large").
 export const speedRowValue           = $('speedRowValue');
 export const skipRowValue            = $('skipRowValue');
 export const btnSizeRowValue         = $('btnSizeRowValue');
@@ -142,14 +115,8 @@ export const urlModalError           = $('urlModalError');
 export const urlModalCloseBtn        = $('urlModalCloseBtn');
 export const youtubePlayerContainer  = $('youtubePlayerContainer');
 
-/* ============================================================
-   Shared state — one object, mutated in place by every module
-   that needs to. Persisted preferences are loaded synchronously
-   here, at module-init time, exactly as the original inline
-   script did.
-   ============================================================ */
 export const state = {
-  playlist: [],        // {id, name, url, file, duration, isRemote, type, youtubeId, nativeIndex}
+  playlist: [],
   currentIndex: -1,
   isScrubbing: false,
   lastVolume: 1,
@@ -202,9 +169,6 @@ export const state = {
   }
 };
 
-/* ============================================================
-   Icon markup
-   ============================================================ */
 export const ICONS = {
   play:  '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>',
@@ -216,9 +180,6 @@ export const ICONS = {
   fsExit:'<svg viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>'
 };
 
-/* ============================================================
-   Small shared helpers
-   ============================================================ */
 export function fmtTime(sec) {
   if (!isFinite(sec) || sec < 0) sec = 0;
   sec = Math.floor(sec);

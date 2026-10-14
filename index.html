@@ -16,6 +16,7 @@
       <svg viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zm1 2v9h14V8H5zm5.5 1.8 4.7 3-4.7 3v-6z"/></svg>
       <h1>Local Video Player</h1>
       <p>Drag &amp; drop video files anywhere on this page</p>
+      <button id="resumeBtn" class="resume-btn" type="button" hidden>&#9654; Back to player</button>
       <button id="openBtn">Open video files</button>
       <div class="or-divider">or</div>
       <div class="url-row">
@@ -55,6 +56,9 @@
     <div class="spinner" id="spinner"></div>
 
     <div class="top-bar" id="topBar">
+      <button class="icon-btn" id="homeBtn" title="Home">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      </button>
       <button class="icon-btn" id="playlistToggleBtn" title="Show/hide playlist (P)">
         <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h10v2H4z"/></svg>
       </button>
@@ -132,17 +136,6 @@
             <button class="icon-btn small" id="settingsBtn" title="Settings">
               <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.1 7.1 0 0 0 .06-.94 7.1 7.1 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.6.24-1.15.56-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.3-.06.62-.06.94s.02.64.06.94L2.82 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.48.38 1.03.7 1.63.94l.36 2.54c.05.24.26.42.5.42h3.84c.24 0 .45-.18.5-.42l.36-2.54c.6-.24 1.15-.56 1.63-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
             </button>
-            <!--
-              Two-level "main list -> submenu" settings menu (see
-              controls.js's showSettingsPanel()/wireSettingsNavigation()).
-              Only one .settings-panel has the .active class at a time.
-              Each main-panel row's data-target names the submenu panel
-              id it opens; each submenu's header's data-back returns to
-              settingsMainPanel. playback-enhancements' duration.js
-              appends its "Video & playlist lengths" toggle into
-              settingsMainPanel, and speed.js appends its custom-speed
-              slider into settingsSpeedPanel (after the native presets).
-            -->
             <div class="settings-menu hidden" id="settingsMenu">
 
               <div class="settings-panel active" id="settingsMainPanel">
@@ -356,4 +349,4 @@
   <script src="course-feature.js"></script>
   <script type="module" src="playback-enhancements/index.js"></script>
 </body>
-</html> 
+</html>

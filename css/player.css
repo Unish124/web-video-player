@@ -15,10 +15,9 @@
   --btn-icon-small:19px;
   font-size:16px;
 
-  /* ---- motion system: Apple-like spring/ease curves ---- */
-  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);      /* confident ease-out, no overshoot */
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);   /* soft overshoot "pop" */
-  --ease-snap:   cubic-bezier(0.65, 0, 0.35, 1);       /* ease-in-out for toggles */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-snap:   cubic-bezier(0.65, 0, 0.35, 1);
   --dur-fast: 140ms;
   --dur-base: 260ms;
   --dur-slow: 420ms;
@@ -43,7 +42,6 @@ html,body{
   background:var(--bg);
 }
 
-/* ---------------- Drop zone / empty state ---------------- */
 .drop-zone{
   flex:1;
   display:flex;align-items:center;justify-content:center;
@@ -92,7 +90,6 @@ html,body{
 #openBtn:hover{ filter:brightness(1.12); transform:translateY(-1px) scale(1.02); }
 #openBtn:active{ transform:scale(.96); transition-duration:80ms; }
 
-/* ---------------- Player wrapper ---------------- */
 .player-wrapper{
   position:relative;
   flex:1;
@@ -114,7 +111,6 @@ html,body{
 #app.theater .player-wrapper{ flex:1 1 auto; }
 #app.theater .playlist-panel{ width:0; padding:0; border:none; overflow:hidden; }
 
-/* ---------------- Gesture layer (click zones) ---------------- */
 .gesture-layer{
   position:absolute;inset:0;
   display:flex;
@@ -123,7 +119,6 @@ html,body{
 .gesture-zone{ flex:1; }
 .gesture-zone.center{ flex:1.4; }
 
-/* seek flash (double-tap +-10s like YouTube) */
 .seek-flash{
   position:absolute;top:50%;transform:translateY(-50%);
   width:110px;height:110px;
@@ -147,7 +142,6 @@ html,body{
   100%{ transform:translateY(-50%) scale(1); opacity:1; }
 }
 
-/* center play/pause flash icon */
 .center-icon{
   position:absolute;top:50%;left:50%;
   transform:translate(-50%,-50%) scale(.7);
@@ -168,7 +162,6 @@ html,body{
   100%{ opacity:0; transform:translate(-50%,-50%) scale(1.18); }
 }
 
-/* spinner */
 .spinner{
   position:absolute;top:50%;left:50%;
   width:46px;height:46px;
@@ -182,7 +175,6 @@ html,body{
 .spinner.show{ opacity:1; animation:spin .8s linear infinite; }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 
-/* hold-space-to-fast-forward indicator */
 .hold-speed-indicator{
   position:absolute;top:9%;left:50%;
   transform:translate(-50%,-6px);
@@ -202,7 +194,6 @@ html,body{
   transform:translate(-50%,0);
 }
 
-/* ---------------- Top bar ---------------- */
 .top-bar{
   position:absolute;top:0;left:0;right:0;
   padding:14px 16px;
@@ -220,7 +211,6 @@ html,body{
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 
-/* ---------------- Bottom controls ---------------- */
 .bottom-controls{
   position:absolute;left:0;right:0;bottom:0;
   z-index:5;
@@ -424,14 +414,6 @@ html,body{
   height:1px;background:#333;margin:4px 0;
 }
 
-/* ---------------- Settings menu: drill-down panels ----------------
-   The settings menu is a two-level "main list -> submenu" navigation
-   instead of one long stacked list of every speed/skip/button-size
-   option at once (which was overflowing off the top of the screen).
-   Only the .settings-panel with the .active class is shown; each main-
-   panel .settings-row's data-target names which submenu panel it opens
-   (wired in controls.js's wireSettingsNavigation()), and each submenu's
-   .settings-panel-header (data-back) returns to settingsMainPanel. */
 .settings-panel{ display:none; }
 .settings-panel.active{ display:block; }
 
@@ -472,13 +454,11 @@ html,body{
 .speed-option.selected{ color:var(--accent); }
 .speed-option.selected::after{ content:"✓"; }
 
-/* ---------------- Feature-gated UI (hidden unless enabled in Extra features) ---------------- */
 #app:not(.feat-abloop) #abLoopBtn{ display:none; }
 #app:not(.feat-timer) #studyTimerBtn{ display:none; }
 #app:not(.feat-multi) .playlist-tab.saved-extra{ display:none; }
 #app:not(.feat-multi) #addPlaylistTab{ display:none; }
 
-/* ---------------- Extra features overlay ---------------- */
 .feature-row{
   display:flex;align-items:center;justify-content:space-between;
   gap:14px;padding:12px 2px;
@@ -511,7 +491,6 @@ html,body{
 }
 .toggle-switch.on .knob{ transform:translateX(18px); }
 
-/* ---------------- Per-control show/hide toggles (in ⚙ settings) ---------------- */
 #controlToggles{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -538,7 +517,6 @@ html,body{
 .control-reset-btn:hover{ background:rgba(255,255,255,.08);color:#fff; transform:scale(1.04); }
 .control-reset-btn:active{ transform:scale(.96); }
 
-/* ---------------- A/B loop badge ---------------- */
 #abLoopBtn{ position:relative; }
 #abLoopBtn .ab-label{
   position:absolute;bottom:1px;right:1px;
@@ -552,17 +530,6 @@ html,body{
 #abLoopBtn.ab-armed .ab-label,
 #abLoopBtn.active .ab-label{ display:block; }
 
-/* ---------------- Fullscreen study timer pill ----------------
-   The main draggable study-timer panel lives outside the player
-   element (appended to #app so it can float anywhere on screen),
-   which means it — and every control on it — vanishes the moment
-   the browser's real Fullscreen API takes over, since only the
-   fullscreened element's own subtree stays on screen. This pill
-   lives inside playerWrapper itself, so it's the only way to see
-   the countdown while fullscreen. It only appears once a session
-   is actually running, and reveals a ✕ on hover to dismiss it for
-   the rest of that fullscreen session (it comes back next time
-   fullscreen is (re-)entered while a session is still running). */
 .fs-study-timer-pill{
   position:absolute;top:14px;right:16px;
   display:flex;align-items:center;gap:7px;
@@ -606,7 +573,6 @@ html,body{
 }
 .fs-pill-stop.hidden{ display:none; }
 
-/* ---------------- Study timer ---------------- */
 .study-timer-wrap{ position:relative; }
 .study-timer-menu{
   position:fixed;
@@ -722,7 +688,6 @@ html,body{
 .study-timer-edit-btn:active{ transform:translateY(-50%) scale(.9); }
 .study-timer-edit-btn svg{ fill:currentColor; }
 
-/* Style-switch button (digital <-> analog), mirrors the edit button on the opposite side */
 .study-timer-style-btn{
   position:absolute;right:0;top:50%;transform:translateY(-50%);
   z-index:2;
@@ -745,9 +710,6 @@ html,body{
 }
 .study-timer-countdown[hidden]{ display:none; }
 
-/* Analog (radial "pie") clock face — fraction of time remaining shrinks
-   clockwise, like a classic visual countdown timer. Works for any
-   duration (not just <=60 min like a literal clock-hands face would). */
 .study-timer-analog{
   display:flex;align-items:center;justify-content:center;
   flex:1;height:100%;
@@ -806,10 +768,6 @@ html,body{
 }
 body.lvp-no-select{ user-select:none; }
 
-/* ---------------- Study timer: minimal mode (H / eye button) ----------------
-   Hides every button/control in the panel except the countdown display
-   and the eye toggle itself — including the drag-hint header title —
-   so the timer can sit on screen with nothing else visible or clickable. */
 .study-timer-menu.minimal-mode .study-timer-header .close-x,
 .study-timer-menu.minimal-mode .study-timer-header .title,
 .study-timer-menu.minimal-mode .study-timer-edit-btn,
@@ -819,7 +777,6 @@ body.lvp-no-select{ user-select:none; }
   display:none !important;
 }
 
-/* ---------------- Multi-playlist tabs ---------------- */
 .playlist-tab{ position:relative; }
 .playlist-tab .tab-del{
   display:none;
@@ -832,7 +789,6 @@ body.lvp-no-select{ user-select:none; }
 }
 .playlist-tab.saved-extra:hover .tab-del{ display:flex; }
 
-/* ---------------- Playlist panel ---------------- */
 .playlist-panel{
   width:320px;flex-shrink:0;
   background:var(--panel);
@@ -895,51 +851,144 @@ body.lvp-no-select{ user-select:none; }
 .playlist-item .load-btn svg{ width:15px;height:15px;fill:currentColor; }
 #playlistItems{
   list-style:none;margin:0;padding:6px;overflow-y:auto;flex:1;
+  position:relative;
 }
 .playlist-item{
-  display:flex;align-items:center;gap:10px;
-  padding:8px;border-radius:8px;
+  display:flex;align-items:center;gap:8px;
+  padding:6px 8px 6px 2px;border-radius:8px;
   cursor:pointer;
   margin-bottom:2px;
   position:relative;
-  transition:background var(--dur-fast) var(--ease-smooth), transform var(--dur-fast) var(--ease-smooth), box-shadow var(--dur-fast) var(--ease-smooth);
-  animation:itemFadeIn var(--dur-slow) var(--ease-smooth) both;
+  transition:background var(--dur-fast) var(--ease-smooth), transform 260ms var(--ease-smooth), box-shadow var(--dur-fast) var(--ease-smooth);
 }
-.playlist-item:hover{ background:var(--panel-2); transform:translateX(2px); }
-.playlist-item:active{ transform:scale(.98); transition-duration:80ms; }
-.playlist-item.playing{ background:#2a2a2a; box-shadow:inset 2px 0 0 var(--accent); }
-/* Drag-and-drop reordering (see playlist.js's renderPlaylist()/reorderPlaylist()) */
-.playlist-item{ cursor:grab; }
-.playlist-item.dragging{ opacity:.35; cursor:grabbing; }
-.playlist-item.drag-over-top{ box-shadow:inset 0 2px 0 0 var(--accent); }
-.playlist-item.drag-over-bottom{ box-shadow:inset 0 -2px 0 0 var(--accent); }
-.playlist-item.playing.drag-over-top{ box-shadow:inset 2px 0 0 var(--accent), inset 0 2px 0 0 var(--accent); }
-.playlist-item.playing.drag-over-bottom{ box-shadow:inset 2px 0 0 var(--accent), inset 0 -2px 0 0 var(--accent); }
+#savedItems .playlist-item{ padding-left:8px; animation:itemFadeIn var(--dur-slow) var(--ease-smooth) backwards; }
+.playlist-item.enter{ animation:itemFadeIn var(--dur-slow) var(--ease-smooth) backwards; }
+.playlist-item:hover{ background:var(--panel-2); }
+.playlist-item.playing{ background:#2a2a2a; }
 @keyframes itemFadeIn{
   from{ opacity:0; transform:translateY(6px); }
   to{ opacity:1; transform:translateY(0); }
 }
+
+.playlist-item .idx-col{
+  position:relative;width:24px;height:28px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-dim);font-size:.75rem;font-variant-numeric:tabular-nums;
+}
+.playlist-item .idx,
+.playlist-item .idx-play{ transition:opacity var(--dur-fast) var(--ease-smooth); }
+.playlist-item .idx-play{ display:none;width:12px;height:12px;fill:#fff; }
+.playlist-item.playing .idx{ display:none; }
+.playlist-item.playing .idx-play{ display:block; }
+.playlist-item .drag-handle{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  background:none;border:none;padding:0;margin:0;
+  color:#bbb;cursor:grab;
+  touch-action:none;user-select:none;-webkit-user-select:none;
+  opacity:0;pointer-events:none;
+  transition:opacity var(--dur-fast) var(--ease-smooth), color var(--dur-fast) var(--ease-smooth);
+}
+.playlist-item .drag-handle svg{ width:18px;height:18px;fill:currentColor;pointer-events:none; }
+.playlist-item .drag-handle:hover{ color:#fff; }
+.playlist-item:hover .drag-handle,
+.playlist-item.dragging .drag-handle,
+.playlist-item .drag-handle:focus-visible{ opacity:1;pointer-events:auto; }
+.playlist-item:hover .idx,
+.playlist-item:hover .idx-play,
+.playlist-item.dragging .idx,
+.playlist-item.dragging .idx-play{ opacity:0; }
+.playlist-item.dragging .drag-handle{ cursor:grabbing; }
+
+.playlist-item.dragging{
+  background:#2c2c2c;
+  box-shadow:0 10px 28px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08);
+  cursor:grabbing;
+  will-change:transform;
+  transition:box-shadow var(--dur-fast) var(--ease-smooth), background var(--dur-fast) var(--ease-smooth);
+}
+.playlist-item.dragging.drop-settle{
+  background:var(--panel-2);
+  box-shadow:0 2px 6px rgba(0,0,0,.25);
+  transition:transform 240ms var(--ease-smooth), box-shadow 240ms var(--ease-smooth), background 240ms var(--ease-smooth);
+}
+#playlistItems.is-sorting{ user-select:none;-webkit-user-select:none;cursor:grabbing; }
+#playlistItems.is-sorting .playlist-item:not(.dragging){ pointer-events:none; }
+
 .playlist-item .thumb{
-  width:80px;height:45px;flex-shrink:0;
-  background:#000;border-radius:4px;
+  width:96px;height:54px;flex-shrink:0;
+  background:#000;border-radius:6px;
   display:flex;align-items:center;justify-content:center;
   overflow:hidden;
   position:relative;
 }
-.playlist-item .thumb svg{ width:18px;height:18px;fill:#666; }
-.playlist-item .thumb .playing-badge{
-  position:absolute;inset:0;
-  background:rgba(0,0,0,.45);
-  display:none;
-  align-items:center;justify-content:center;
+.playlist-item .thumb .thumb-ph{ width:22px;height:22px;fill:#555; }
+.playlist-item .thumb .thumb-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;display:block;
+  -webkit-user-drag:none;user-select:none;
 }
-.playlist-item.playing .thumb .playing-badge{ display:flex; }
+.playlist-item .thumb .thumb-img[hidden]{ display:none; }
+.playlist-item .dur{
+  position:absolute;right:4px;bottom:6px;
+  background:rgba(0,0,0,.8);color:#fff;
+  font-size:.7rem;font-weight:600;line-height:1.3;
+  padding:1px 4px;border-radius:4px;
+  font-variant-numeric:tabular-nums;
+}
+.playlist-item .dur:empty{ display:none; }
+.playlist-item .prog{
+  position:absolute;left:0;right:0;bottom:0;height:3px;
+  background:rgba(255,255,255,.25);display:none;
+}
+.playlist-item.has-progress .prog{ display:block; }
+.playlist-item .prog-fill{ height:100%;width:0;background:var(--accent);transition:width 1s linear; }
+.playlist-item .saved-flag{
+  position:absolute;left:4px;top:4px;
+  width:18px;height:18px;border-radius:50%;
+  background:rgba(0,0,0,.7);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+}
+.playlist-item .saved-flag[hidden]{ display:none; }
+.playlist-item .saved-flag svg{ width:11px;height:11px; }
+
 .playlist-item .meta{ flex:1;min-width:0; }
 .playlist-item .meta .name{
-  font-size:.82rem;color:#eee;
+  font-size:.85rem;font-weight:600;color:#fff;line-height:1.3;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  overflow:hidden;word-break:break-word;
+}
+.playlist-item .meta .sub{
+  font-size:.74rem;color:var(--text-dim);margin-top:3px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-.playlist-item .meta .dur{ font-size:.72rem;color:#888;margin-top:2px; }
+.playlist-item .meta .sub .yt-badge{
+  background:none;color:inherit;padding:0;margin:0;
+  font-size:inherit;font-weight:400;letter-spacing:0;vertical-align:baseline;
+}
+.playlist-item .meta .sub .yt-badge-sep::before{ content:" \2022 "; }
+.playlist-item .row-menu-btn{
+  position:absolute;right:4px;top:50%;margin-top:-14px;
+  background-color:inherit;border:none;color:#ddd;
+  width:28px;height:28px;border-radius:50%;
+  cursor:pointer;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;
+  transition:opacity var(--dur-fast) var(--ease-smooth), background-image var(--dur-fast) var(--ease-smooth);
+}
+.playlist-item .row-menu-btn svg{ width:20px;height:20px;fill:currentColor; }
+.playlist-item:hover .row-menu-btn,
+.playlist-item .row-menu-btn:focus-visible{ opacity:1; }
+.playlist-item .row-menu-btn:hover{ background-image:linear-gradient(rgba(255,255,255,.16),rgba(255,255,255,.16)); }
+.playlist-item.dragging .row-menu-btn{ opacity:0; }
+
+@media (hover:none){
+  .playlist-item .drag-handle{ opacity:1;pointer-events:auto; }
+  .playlist-item .idx,
+  .playlist-item .idx-play{ opacity:0; }
+  .playlist-item .row-menu-btn{ opacity:1; }
+}
+
 .playlist-item .remove-btn{
   background:none;border:none;color:#888;
   width:26px;height:26px;border-radius:50%;
@@ -949,22 +998,18 @@ body.lvp-no-select{ user-select:none; }
 }
 .playlist-item .remove-btn:hover{ background:rgba(255,255,255,.12);color:#fff; transform:scale(1.15) rotate(90deg); }
 .playlist-item .remove-btn svg{ width:15px;height:15px;fill:currentColor; }
-/* Per-item save indicator (Now Playing list) — see playlist.js's
-   isLinkSaved()/toggleSaveSingleItem(). Filled + accent color when the
-   item is already in the active saved playlist; hollow + gray when not. */
-.playlist-item .save-item-btn{
-  background:none;border:none;color:#888;
-  width:26px;height:26px;border-radius:50%;
-  cursor:pointer;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  transition:background var(--dur-fast) var(--ease-smooth), color var(--dur-fast) var(--ease-smooth), transform var(--dur-fast) var(--ease-spring);
-}
-.playlist-item .save-item-btn:hover{ background:rgba(255,255,255,.12);color:#fff; transform:scale(1.15); }
-.playlist-item .save-item-btn svg{ width:15px;height:15px; }
-.playlist-item .save-item-btn.saved{ color:var(--accent); }
-.playlist-item .save-item-btn.saved:hover{ filter:brightness(1.25); }
 
-/* ---------------- Shortcuts overlay ---------------- */
+.resume-btn{
+  display:block;margin:18px auto 0;
+  background:#fff;color:#111;border:none;
+  padding:11px 26px;border-radius:20px;
+  font-size:.95rem;font-weight:600;cursor:pointer;
+  transition:filter var(--dur-base) var(--ease-smooth), transform var(--dur-fast) var(--ease-spring);
+}
+.resume-btn[hidden]{ display:none; }
+.resume-btn:hover{ filter:brightness(.92); transform:translateY(-1px) scale(1.02); }
+.resume-btn:active{ transform:scale(.96); transition-duration:80ms; }
+
 .shortcuts-overlay{
   position:absolute;inset:0;
   background:rgba(0,0,0,.82);
@@ -1005,7 +1050,6 @@ body.lvp-no-select{ user-select:none; }
   padding:9px 20px;border-radius:18px;cursor:pointer;font-weight:600;font-size:.85rem;
 }
 
-/* toast (e.g. "Removed from playlist") */
 .toast{
   position:absolute;bottom:80px;left:50%;transform:translateX(-50%) translateY(10px);
   background:rgba(20,20,20,.95);
@@ -1018,7 +1062,6 @@ body.lvp-no-select{ user-select:none; }
 }
 .toast.show{ opacity:1;transform:translateX(-50%) translateY(0); }
 
-/* ---------------- YouTube embed mode ---------------- */
 #youtubePlayerContainer{
   position:absolute;inset:0;
   width:100%;height:100%;
@@ -1038,7 +1081,6 @@ body.lvp-no-select{ user-select:none; }
   vertical-align:middle;
 }
 
-/* ---------------- URL input row ---------------- */
 .url-row{
   display:flex;gap:8px;margin-top:18px;
   width:100%;

@@ -1,6 +1,6 @@
 video-player/course-feature.js
 
-Unchanged from what already exists — the "Open Course Folder" feature. Self-contained IIFE, no changes needed.
+Unchanged from what already exists — the "Open folder" feature. Self-contained IIFE, no changes needed.
 
 video-player/css/player.css
 
@@ -51,3 +51,11 @@ Everything playlist-data-related: handleFiles, loadVideo, removeFromPlaylist, re
 video-player/src/study-timer.js
 
 The whole draggable/resizable study-timer panel: duration presets, custom-minutes input, start/pause/resume/stop, the countdown tick, the minimal ("H") mode, drag-to-move, drag-to-resize, geometry persistence, and the fullscreen pill. Kept separate from controls.js since it's a large, fully self-contained feature that only needs pauseMedia() from media.js and nothing else from the rest of the app.
+
+video-player/src/playlist-sort.js
+
+Pointer-based drag reordering for the Now Playing list. Hovering a row reveals a drag handle; dragging lifts the row, the others slide out of the way, and it settles into place on release. Escape cancels. Also provides the animated shift used by "Move to top / bottom" and "Remove".
+
+video-player/src/thumbs.js
+
+Playlist thumbnails (YouTube thumbnail images, or a frame captured from local / direct video files) and YouTube title + channel lookup.

@@ -1,49 +1,5 @@
-/*!
- * playlist.js
- * Everything about how items get in and out of the playlist: adding
- * local files, loading and rendering the "Now Playing" list (including
- * drag-and-drop reordering), the saved/multi-playlist tabs (with their
- * own localStorage persistence), and the URL/YouTube-link add flow
- * (inline row + modal).
- *
- * Depends on (one-directional imports — nothing below imports from
- * this file):
- *
- *   from './core.js':
- *     state, video, dropZone, playerWrapper, fileInput, videoTitle,
- *     durTimeEl, playlistPanel, playlistItemsEl, playlistTabs,
- *     savedItemsEl, savedCountBadge, extraPlaylistTabs, addMoreBtn,
- *     addFilesTopBtn, prevBtn, nextBtn, addUrlBtn2,
- *     urlInput, urlAddBtn, urlError, urlModalOverlay, urlModalInput,
- *     urlModalAddBtn, urlModalError, urlModalCloseBtn, newPlaylistOverlay,
- *     newPlaylistInput, newPlaylistAddBtn, newPlaylistCloseBtn,
- *     fmtTime, showToast, uid, escapeHtml
- *
- *   from './media.js':
- *     loadMediaItem(item, autoplay), saveCurrentPosition(),
- *     setOnEndedCallback(fn), setOnDurationCallback(fn)
- *
- * Exports:
- *   initPlaylist()          — wires everything below and restores the
- *                             default Saved playlist on load.
- *   handleFiles(fileList)   — used by main.js's drag & drop, and by this
- *                             file's own #fileInput 'change' listener
- *                             (which also fires for course-feature.js's
- *                             synthetic DataTransfer import).
- *   loadVideo(index, autoplay) — used by main.js's keyboard shortcuts
- *                             (Shift+N/Shift+P), and internally.
- *   closeUrlModal()         — used by main.js's Escape-key handling.
- *   onMultiFeatureToggled() — used by controls.js's Extra Features
- *                             overlay when the "multiple playlists"
- *                             toggle is flipped.
- *
- * Drag-and-drop reordering (Now Playing list only — see renderPlaylist()
- * and reorderPlaylist() below): uses the native HTML5 Drag and Drop API,
- * so it covers mouse drags on desktop browsers. That API has no touch
- * equivalent, so dragging to reorder isn't available on touchscreens —
- * everything else in the playlist (tapping to load, the remove button)
- * still works fine there.
- */
+/* playlist.js: Now Playing rows, saved playlists and the URL / YouTube add flow */
+
 import {
   state, video, dropZone, playerWrapper, fileInput, videoTitle, durTimeEl,
   playlistPanel, playlistItemsEl, playlistTabs, savedItemsEl, savedCountBadge,
@@ -53,15 +9,10 @@ import {
   newPlaylistOverlay, newPlaylistInput, newPlaylistAddBtn, newPlaylistCloseBtn,
   fmtTime, showToast, uid, escapeHtml
 } from './core.js';
-import { loadMediaItem, saveCurrentPosition, setOnEndedCallback, setOnDurationCallback } from './media.js';
+import { loadMediaItem, saveCurrentPosition, setOnEndedCallback, setOnDurationCallback, mediaDuration, mediaCurrentTime } from './media.js';
+import { ensureThumbnail, ensureYouTubeMeta } from './thumbs.js';
+import { initPlaylistSort } from './playlist-sort.js';
 
-/* ============================================================
-   Adding local files
-   ============================================================ */
-// insertAt (optional): index to insert the new items at, instead of
-// appending them to the end. Used when a removed course lesson is
-// restored, so it goes back where it was rather than at the bottom.
-// Values outside 0..length fall back to appending.
 export function handleFiles(fileList, insertAt) {
   const files = Array.from(fileList).filter(f => f.type.startsWith('video/') || /\.(mkv|mov|avi|webm|mp4|m4v|ogv)$/i.test(f.name));
   if (!files.length) { showToast('No supported video files found'); return; }
@@ -76,8 +27,6 @@ export function handleFiles(fileList, insertAt) {
     duration: null
   }));
   state.playlist.splice(startIndex, 0, ...newItems);
-  // Inserting at or before the playing item pushes it down; keep
-  // currentIndex pointing at the same video.
   if (state.currentIndex !== -1 && startIndex <= state.currentIndex) {
     state.currentIndex += newItems.length;
   }
@@ -95,12 +44,9 @@ export function handleFiles(fileList, insertAt) {
   }
 }
 
-/* ============================================================
-   Loading / removing / rendering the "Now Playing" list
-   ============================================================ */
 export function loadVideo(index, autoplay) {
   if (index < 0 || index >= state.playlist.length) return;
-  saveCurrentPosition(); // capture the outgoing item's position, if resume is on
+  saveCurrentPosition();
   state.currentIndex = index;
   const item = state.playlist[index];
 
@@ -134,157 +80,242 @@ function removeFromPlaylist(id) {
   renderPlaylist();
 }
 
-/* ============================================================
-   Drag-and-drop reordering
-   dragSrcIndex tracks which row a drag started from. On drop, the row
-   being dropped ON tells us where (before/above vs after/below itself,
-   based on cursor position within that row) — reorderPlaylist() then
-   does the actual array move.
-   ============================================================ */
-let dragSrcIndex = null;
+const rowCache = new Map();
+let sorter = null;
 
-function clearDragOverIndicators() {
-  Array.from(playlistItemsEl.children).forEach(el => {
-    el.classList.remove('drag-over-top', 'drag-over-bottom');
-  });
+const KEBAB_SVG = '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>';
+const HANDLE_SVG = '<svg viewBox="0 0 24 24"><path d="M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z"/></svg>';
+
+function subtitleHtml(item) {
+  if (item.type === 'youtube') {
+    return item.author
+      ? escapeHtml(item.author) + '<span class="yt-badge yt-badge-sep">YouTube</span>'
+      : '<span class="yt-badge">YouTube</span>';
+  }
+  if (item.isRemote) {
+    try { return escapeHtml(new URL(item.url).hostname.replace(/^www\./, '')); }
+    catch (e) { return 'Video link'; }
+  }
+  const rel = item.file && item.file.webkitRelativePath;
+  if (rel) {
+    const parts = rel.split('/');
+    if (parts.length > 1) return escapeHtml(parts[parts.length - 2]);
+  }
+  return 'Local file';
 }
 
-// Moves the item at fromIndex so it ends up immediately before whatever
-// is currently at toIndex (toIndex measured in the array BEFORE the
-// item is removed — e.g. toIndex = state.playlist.length means "move
-// to the very end"). Keeps state.currentIndex pointing at whichever
-// item is actually playing by re-finding it by id afterward, since a
-// reorder shifts everyone's index around it.
-function reorderPlaylist(fromIndex, toIndex) {
-  let insertAt = toIndex;
-  if (fromIndex < toIndex) insertAt -= 1; // account for the removal shifting later indices down
-  if (insertAt === fromIndex) return; // dropped back where it started — no-op
+function buildRow(item) {
+  const li = document.createElement('li');
+  li.className = 'playlist-item enter';
+  li.dataset.id = item.id;
+  li.innerHTML = `
+    <div class="idx-col">
+      <span class="idx"></span>
+      <svg class="idx-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <button class="drag-handle" type="button" title="Drag to reorder" aria-label="Drag to reorder">${HANDLE_SVG}</button>
+    </div>
+    <div class="thumb">
+      <img class="thumb-img" alt="" draggable="false" hidden>
+      <svg class="thumb-ph" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <span class="saved-flag" hidden>${BOOKMARK_FILLED_SVG}</span>
+      <div class="dur"></div>
+      <div class="prog"><div class="prog-fill"></div></div>
+    </div>
+    <div class="meta">
+      <div class="name"></div>
+      <div class="sub"></div>
+    </div>
+    <button class="row-menu-btn" type="button" title="More options" aria-label="More options">${KEBAB_SVG}</button>`;
 
-  const playingId = state.currentIndex !== -1 ? state.playlist[state.currentIndex].id : null;
+  li.addEventListener('animationend', () => li.classList.remove('enter'), { once: true });
 
-  const [moved] = state.playlist.splice(fromIndex, 1);
-  state.playlist.splice(insertAt, 0, moved);
+  const itemOf = () => state.playlist.find(p => p.id === item.id);
 
-  if (playingId != null) {
-    state.currentIndex = state.playlist.findIndex(p => p.id === playingId);
+  li.addEventListener('click', (e) => {
+    if (e.target.closest('.row-menu-btn') || e.target.closest('.drag-handle')) return;
+    const idx = state.playlist.findIndex(p => p.id === item.id);
+    if (idx !== -1) loadVideo(idx);
+  });
+  li.querySelector('.row-menu-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const it = itemOf();
+    if (it) openRowMenu(it, e.currentTarget);
+  });
+  const img = li.querySelector('.thumb-img');
+  img.addEventListener('error', () => {
+    const it = itemOf();
+    if (it) { it.thumb = null; it.thumbTried = true; }
+    img.hidden = true;
+    li.querySelector('.thumb-ph').style.display = '';
+  });
+  sorter.attachHandle(li.querySelector('.drag-handle'), li);
+  return li;
+}
+
+function updateThumbAndDuration(li, item) {
+  const img = li.querySelector('.thumb-img');
+  const ph = li.querySelector('.thumb-ph');
+  if (item.thumb) {
+    if (img.getAttribute('src') !== item.thumb) img.src = item.thumb;
+    img.hidden = false;
+    ph.style.display = 'none';
   }
+  if (item.duration) {
+    const text = fmtTime(item.duration);
+    const dur = li.querySelector('.dur');
+    if (dur.textContent !== text) dur.textContent = text;
+  }
+}
 
-  renderPlaylist();
+function updateProgress(li, item) {
+  const pct = Math.round((item.progress || 0) * 1000) / 10;
+  li.querySelector('.prog-fill').style.width = pct + '%';
+  li.classList.toggle('has-progress', pct > 0);
+}
+
+function updateRow(li, item, i, savedUrls) {
+  li.classList.toggle('playing', i === state.currentIndex);
+  const idx = li.querySelector('.idx');
+  const label = String(i + 1);
+  if (idx.textContent !== label) idx.textContent = label;
+
+  const nameEl = li.querySelector('.name');
+  if (nameEl.getAttribute('title') !== item.name) {
+    nameEl.setAttribute('title', item.name);
+    nameEl.textContent = item.name;
+  }
+  const sub = li.querySelector('.sub');
+  const subHtml = subtitleHtml(item);
+  if (li.dataset.sub !== subHtml) { li.dataset.sub = subHtml; sub.innerHTML = subHtml; }
+
+  li.querySelector('.saved-flag').hidden = !(item.isRemote && savedUrls.has(item.url));
+  updateThumbAndDuration(li, item);
+  updateProgress(li, item);
+}
+
+function patchRow(id) {
+  const li = rowCache.get(id);
+  const item = state.playlist.find(p => p.id === id);
+  if (!li || !item) return;
+  updateThumbAndDuration(li, item);
+}
+
+function applyMove(from, to) {
+  if (from === to || from < 0 || to < 0 || from >= state.playlist.length || to >= state.playlist.length) return;
+  const playingId = state.currentIndex !== -1 ? state.playlist[state.currentIndex].id : null;
+  const [moved] = state.playlist.splice(from, 1);
+  state.playlist.splice(to, 0, moved);
+  if (playingId != null) state.currentIndex = state.playlist.findIndex(p => p.id === playingId);
 }
 
 function renderPlaylist() {
-  playlistItemsEl.innerHTML = '';
+  if (!sorter) {
+    sorter = initPlaylistSort({
+      list: playlistItemsEl,
+      onCommit: (from, to) => { applyMove(from, to); renderPlaylist(); }
+    });
+  }
+  const savedUrls = new Set();
+  getSaveTargets().forEach(pl => pl.links.forEach(l => savedUrls.add(l.url)));
+
+  const liveIds = new Set(state.playlist.map(p => p.id));
+  rowCache.forEach((li, id) => {
+    if (!liveIds.has(id)) { li.remove(); rowCache.delete(id); }
+  });
+
+  let prev = null;
   state.playlist.forEach((item, i) => {
-    const li = document.createElement('li');
-    li.className = 'playlist-item' + (i === state.currentIndex ? ' playing' : '');
-    li.draggable = true;
-    // Local files can never be saved (there's nothing durable to store
-    // for an in-memory blob URL), so the per-item save icon only appears
-    // for remote items (direct URLs and YouTube links). Its filled-vs-
-    // outline state reflects whether this url is saved in any playlist
-    // that currently counts (see getSaveTargets()).
-    const saved = item.isRemote && isLinkSaved(item.url);
-    const saveBtnHtml = item.isRemote ? `
-      <button class="save-item-btn${saved ? ' saved' : ''}" title="${state.features.multi ? (saved ? 'Saved \u2014 click to manage playlists' : 'Save to a playlist\u2026') : (saved ? 'Saved \u2014 click to remove' : 'Save this video')}">
-        ${saved ? BOOKMARK_FILLED_SVG : BOOKMARK_OUTLINE_SVG}
-      </button>` : '';
-    li.innerHTML = `
-      <div class="thumb">
-        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        <div class="playing-badge">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="#ff0000"><path d="M8 5v14l11-7z"/></svg>
-        </div>
-      </div>
-      <div class="meta">
-        <div class="name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.type === 'youtube' ? '<span class="yt-badge">YouTube</span>' : (item.isRemote ? ' <span style="color:#666;">(URL)</span>' : '')}</div>
-        <div class="dur">${item.duration ? fmtTime(item.duration) : ''}</div>
-      </div>
-      ${saveBtnHtml}
-      <button class="remove-btn" title="Remove">
-        <svg viewBox="0 0 24 24"><path d="M18.3 5.71 12 12.01l-6.3-6.3-1.41 1.41 6.3 6.3-6.3 6.29 1.41 1.41 6.3-6.29 6.3 6.29 1.41-1.41-6.3-6.29 6.3-6.3z"/></svg>
-      </button>`;
-    li.addEventListener('click', (e) => {
-      if (e.target.closest('.remove-btn') || e.target.closest('.save-item-btn')) return;
-      loadVideo(i);
-    });
-    li.querySelector('.remove-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeFromPlaylist(item.id);
-    });
-    const saveBtnEl = li.querySelector('.save-item-btn');
-    if (saveBtnEl) {
-      saveBtnEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onSaveButtonClick(item, saveBtnEl);
-      });
-    }
-
-    li.addEventListener('dragstart', (e) => {
-      dragSrcIndex = i;
-      li.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      // Some browsers require dataTransfer data to be set for the drag
-      // to be permitted at all — the value itself isn't used, since
-      // dragSrcIndex (captured above) is what drop reads from.
-      try { e.dataTransfer.setData('text/plain', String(i)); } catch (err) {}
-    });
-    li.addEventListener('dragend', () => {
-      li.classList.remove('dragging');
-      dragSrcIndex = null;
-      clearDragOverIndicators();
-    });
-    li.addEventListener('dragover', (e) => {
-      if (dragSrcIndex === null) return;
-      e.preventDefault(); // required for this element to accept a drop at all
-      e.dataTransfer.dropEffect = 'move';
-      const rect = li.getBoundingClientRect();
-      const before = (e.clientY - rect.top) < rect.height / 2;
-      li.classList.toggle('drag-over-top', before);
-      li.classList.toggle('drag-over-bottom', !before);
-    });
-    li.addEventListener('dragleave', () => {
-      li.classList.remove('drag-over-top', 'drag-over-bottom');
-    });
-    li.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (dragSrcIndex === null) return;
-      const rect = li.getBoundingClientRect();
-      const before = (e.clientY - rect.top) < rect.height / 2;
-      const targetIndex = before ? i : i + 1;
-      reorderPlaylist(dragSrcIndex, targetIndex);
-      clearDragOverIndicators();
-    });
-
-    playlistItemsEl.appendChild(li);
+    let li = rowCache.get(item.id);
+    if (!li) { li = buildRow(item); rowCache.set(item.id, li); }
+    ensureThumbnail(item, () => patchRow(item.id), () => state.playlist.includes(item));
+    ensureYouTubeMeta(item, onItemMetaLoaded);
+    updateRow(li, item, i, savedUrls);
+    const expected = prev ? prev.nextElementSibling : playlistItemsEl.firstElementChild;
+    if (li !== expected) playlistItemsEl.insertBefore(li, expected);
+    prev = li;
   });
 }
 
-/* ============================================================
-   Saved playlists (persist across refresh/reopen)
-   Only remote entries (direct video URLs and YouTube links) can live
-   here — local files are in-memory blob URLs that die when the page
-   closes, so there's nothing durable to store for them.
-   ============================================================ */
-/* ============================================================
-   Per-item save control (Now Playing list)
-   Each remote item has a bookmark button: filled when the video is
-   saved in at least one playlist, hollow when it isn't. Both icon
-   strings use fill/stroke="currentColor" so one CSS color rule
-   (.save-item-btn / .save-item-btn.saved) recolors whichever shows.
+function onItemMetaLoaded() {
+  const cur = state.playlist[state.currentIndex];
+  if (cur) {
+    videoTitle.textContent = cur.name;
+    document.title = cur.name + ' \u2014 Local Video Player';
+  }
+  renderPlaylist();
+}
 
-   With the "multiple playlists" feature OFF there is only the default
-   "Saved" playlist, so the button simply toggles the video in/out of it.
-   With it ON, the button opens a small "Save to playlist" menu listing
-   every playlist with a check next to the ones that already contain the
-   video — click a row to add/remove it there. The target is always
-   chosen explicitly; it no longer depends on which Saved tab happened to
-   be open last (which is what made saving unreliable before).
-   ============================================================ */
+function startProgressTracking() {
+  setInterval(() => {
+    const item = state.playlist[state.currentIndex];
+    if (!item) return;
+    const d = mediaDuration();
+    if (!isFinite(d) || d <= 0) return;
+    const p = Math.max(0, Math.min(1, mediaCurrentTime() / d));
+    if (Math.abs(p - (item.progress || 0)) < 0.002) return;
+    item.progress = p;
+    const li = rowCache.get(item.id);
+    if (li) updateProgress(li, item);
+  }, 1000);
+}
+
+function openRowMenu(item, anchorEl) {
+  if (saveMenuEl && rowMenuAnchor === anchorEl) { closeSaveMenu(); return; }
+  closeSaveMenu();
+  rowMenuAnchor = anchorEl;
+  const index = state.playlist.findIndex(p => p.id === item.id);
+  const last = state.playlist.length - 1;
+
+  saveMenuEl = document.createElement('div');
+  saveMenuEl.className = 'pl-save-menu';
+  saveMenuEl.addEventListener('click', (e) => e.stopPropagation());
+
+  const addEntry = (label, handler, opts = {}) => {
+    const row = document.createElement('div');
+    row.className = 'pl-save-row' + (opts.disabled ? ' pl-menu-disabled' : '');
+    row.textContent = label;
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (opts.disabled) return;
+      handler();
+    });
+    saveMenuEl.appendChild(row);
+  };
+  const addDivider = () => {
+    const d = document.createElement('div');
+    d.className = 'pl-save-divider';
+    saveMenuEl.appendChild(d);
+  };
+
+  if (item.isRemote) {
+    const saved = isLinkSaved(item.url);
+    const label = state.features.multi
+      ? (saved ? 'Saved \u2014 manage playlists\u2026' : 'Save to playlist\u2026')
+      : (saved ? 'Remove from Saved' : 'Save');
+    addEntry(label, () => { closeSaveMenu(); onSaveButtonClick(item, anchorEl); });
+    addDivider();
+  }
+  addEntry('Move to top', () => {
+    closeSaveMenu();
+    sorter.animateChange(() => { applyMove(index, 0); renderPlaylist(); });
+  }, { disabled: index <= 0 });
+  addEntry('Move to bottom', () => {
+    closeSaveMenu();
+    sorter.animateChange(() => { applyMove(index, last); renderPlaylist(); });
+  }, { disabled: index === last });
+  addDivider();
+  addEntry('Remove from playlist', () => {
+    closeSaveMenu();
+    sorter.animateChange(() => removeFromPlaylist(item.id));
+  });
+
+  document.body.appendChild(saveMenuEl);
+  positionSaveMenu(anchorEl);
+}
+
 const BOOKMARK_FILLED_SVG  = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>';
 const BOOKMARK_OUTLINE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>';
 
-// Playlists that count for the saved indicator: just the default one
-// unless the multi-playlist feature is on.
 function getSaveTargets() {
   const all = loadPlaylists();
   return state.features.multi ? all : all.filter(p => p.id === 'default');
@@ -300,7 +331,7 @@ function refreshAfterSaveChange() {
   updateSavedCountBadge();
   renderPlaylistTabs();
   if (savedItemsEl && !savedItemsEl.classList.contains('hidden')) renderSavedList();
-  renderPlaylist(); // refreshes every row's bookmark state
+  renderPlaylist();
 }
 function toggleSaveInPlaylist(item, playlistId) {
   const pl = loadPlaylists().find(p => p.id === playlistId);
@@ -315,14 +346,15 @@ function toggleSaveInPlaylist(item, playlistId) {
   refreshAfterSaveChange();
 }
 
-/* ---- "Save to playlist" menu (multi-playlist mode) ---- */
 let saveMenuEl = null;
-let saveMenuItem = null;            // link-shaped copy of the item the menu is for
-let pendingNewPlaylistItem = null;  // item to add once a new playlist is created
+let saveMenuItem = null;
+let pendingNewPlaylistItem = null;
+let rowMenuAnchor = null;
 
 function closeSaveMenu() {
   if (saveMenuEl) { saveMenuEl.remove(); saveMenuEl = null; }
   saveMenuItem = null;
+  rowMenuAnchor = null;
 }
 function renderSaveMenu() {
   if (!saveMenuEl || !saveMenuItem) return;
@@ -351,7 +383,7 @@ function renderSaveMenu() {
     row.addEventListener('click', (e) => {
       e.stopPropagation();
       toggleSaveInPlaylist(item, pl.id);
-      renderSaveMenu(); // keep the menu open so several playlists can be ticked
+      renderSaveMenu();
     });
     saveMenuEl.appendChild(row);
   });
@@ -378,7 +410,7 @@ function positionSaveMenu(anchorEl) {
   const m = saveMenuEl.getBoundingClientRect();
   let left = r.right - m.width;
   let top = r.bottom + 6;
-  if (top + m.height > window.innerHeight - 8) top = r.top - m.height - 6; // flip above if no room
+  if (top + m.height > window.innerHeight - 8) top = r.top - m.height - 6;
   left = Math.max(8, Math.min(left, window.innerWidth - m.width - 8));
   top = Math.max(8, top);
   saveMenuEl.style.left = left + 'px';
@@ -400,7 +432,6 @@ function onSaveButtonClick(item, anchorEl) {
     toggleSaveInPlaylist(item, 'default');
     return;
   }
-  // Clicking the same row's bookmark again closes its menu.
   if (saveMenuEl && saveMenuItem && saveMenuItem.url === item.url) { closeSaveMenu(); return; }
   openSaveMenu(item, anchorEl);
 }
@@ -431,6 +462,8 @@ function injectSaveMenuStyles() {
     .pl-save-count{ color:#888;font-size:.72rem; }
     .pl-save-divider{ height:1px;background:#333;margin:4px 0; }
     .pl-save-new{ color:#9ecbff; }
+    .pl-menu-disabled{ opacity:.4;cursor:default; }
+    .pl-menu-disabled:hover{ background:none; }
   `;
   document.head.appendChild(style);
 }
@@ -527,7 +560,7 @@ function restoreSavedLinks() {
     playlistPanel.classList.remove('hidden');
     state.playlistOpen = true;
     renderPlaylist();
-    loadVideo(0, false); // load first item's metadata without autoplaying on page load
+    loadVideo(0, false);
   }
   renderPlaylistTabs();
 }
@@ -561,7 +594,7 @@ function removeSavedLink(playlistId, url) {
   updateSavedCountBadge();
   renderPlaylistTabs();
   renderSavedList();
-  renderPlaylist(); // in case that url is also sitting in Now Playing
+  renderPlaylist();
   showToast('Removed from playlist');
 }
 function renderSavedList() {
@@ -583,7 +616,8 @@ function renderSavedList() {
     const displayName = link.name || (isYoutube ? 'YouTube video' : nameFromUrl(link.url));
     li.innerHTML = `
       <div class="thumb">
-        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        ${isYoutube && link.youtubeId ? `<img class="thumb-img" alt="" src="https://i.ytimg.com/vi/${encodeURIComponent(link.youtubeId)}/mqdefault.jpg" onerror="this.remove()">` : ''}
+        <svg class="thumb-ph" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       </div>
       <div class="meta">
         <div class="name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}${isYoutube ? '<span class="yt-badge">YouTube</span>' : ' <span style="color:#666;">(URL)</span>'}</div>
@@ -628,10 +662,6 @@ function switchPlaylistTab(tab) {
     playlistItemsEl.classList.add('hidden');
     savedItemsEl.classList.remove('hidden');
     renderSavedList();
-    // The Now Playing list's save icons reflect the ACTIVE saved
-    // playlist's contents, which just changed — refresh them now
-    // (even while hidden) so they're already correct if the person
-    // switches back to the Now Playing tab.
     renderPlaylist();
   } else {
     savedItemsEl.classList.add('hidden');
@@ -639,8 +669,6 @@ function switchPlaylistTab(tab) {
   }
 }
 
-// Called by controls.js when the "multiple playlists" Extra Feature
-// toggle is flipped, so the Saved tab UI reflects the change.
 export function onMultiFeatureToggled() {
   renderPlaylistTabs();
   if (!state.features.multi && state.activeSavedPlaylistId !== 'default') {
@@ -651,7 +679,7 @@ export function onMultiFeatureToggled() {
 
 function closeNewPlaylistOverlay() {
   newPlaylistOverlay.classList.add('hidden');
-  pendingNewPlaylistItem = null; // cancelled — don't carry the item into a later create
+  pendingNewPlaylistItem = null;
 }
 
 function wireSavedPlaylists() {
@@ -659,7 +687,7 @@ function wireSavedPlaylists() {
     const tabEl = e.target.closest('.playlist-tab');
     if (!tabEl) return;
     if (tabEl.dataset.tab === '__add__') {
-      pendingNewPlaylistItem = null; // plain "+" tab: just create an empty playlist
+      pendingNewPlaylistItem = null;
       newPlaylistInput.value = '';
       newPlaylistOverlay.classList.remove('hidden');
       setTimeout(() => newPlaylistInput.focus(), 0);
@@ -673,8 +701,6 @@ function wireSavedPlaylists() {
     const id = createPlaylist(name);
     newPlaylistOverlay.classList.add('hidden');
 
-    // Came from a bookmark's "+ New playlist…" row: put that video in the
-    // new playlist and stay on the Now Playing tab.
     if (pendingNewPlaylistItem) {
       const item = pendingNewPlaylistItem;
       pendingNewPlaylistItem = null;
@@ -692,16 +718,11 @@ function wireSavedPlaylists() {
   newPlaylistCloseBtn.addEventListener('click', closeNewPlaylistOverlay);
   newPlaylistOverlay.addEventListener('click', (e) => { if (e.target === newPlaylistOverlay) closeNewPlaylistOverlay(); });
 
-  // "Save to playlist" menu: close on outside click, Escape, or when the
-  // list scrolls (the menu is positioned once, next to its bookmark button).
   document.addEventListener('click', () => closeSaveMenu());
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSaveMenu(); });
   playlistItemsEl.addEventListener('scroll', closeSaveMenu);
 }
 
-/* ============================================================
-   URL / YouTube-link add flow
-   ============================================================ */
 function isLikelyDirectVideoUrl(u) {
   try {
     const parsed = new URL(u);
@@ -793,16 +814,10 @@ function wireUrlAdd() {
   urlModalOverlay.addEventListener('click', (e) => { if (e.target === urlModalOverlay) closeUrlModal(); });
 }
 
-/* ============================================================
-   File-picker triggers + change handler
-   ============================================================ */
 function wireFileInput() {
   addMoreBtn.addEventListener('click', () => fileInput.click());
   addFilesTopBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', (e) => {
-    // course-feature.js can set data-insert-at on the input just before
-    // it dispatches a synthetic 'change', to have the files inserted at
-    // a specific position (restoring a removed lesson to where it was).
     const raw = fileInput.dataset.insertAt;
     const insertAt = raw !== undefined && raw !== '' ? parseInt(raw, 10) : undefined;
     handleFiles(e.target.files, Number.isNaN(insertAt) ? undefined : insertAt);
@@ -810,9 +825,6 @@ function wireFileInput() {
   });
 }
 
-/* ============================================================
-   Prev / next
-   ============================================================ */
 function wirePrevNext() {
   prevBtn.addEventListener('click', () => {
     if (state.currentIndex > 0) loadVideo(state.currentIndex - 1);
@@ -822,11 +834,6 @@ function wirePrevNext() {
   });
 }
 
-/* ============================================================
-   Native <video> duration → item.duration + re-render
-   (the YouTube equivalent lives in media.js's onYtReady, which calls
-   setOnDurationCallback's registered function — renderPlaylist, below)
-   ============================================================ */
 function wireNativeDurationTracking() {
   video.addEventListener('loadedmetadata', () => {
     durTimeEl.textContent = fmtTime(video.duration);
@@ -837,19 +844,14 @@ function wireNativeDurationTracking() {
   });
 }
 
-/* ============================================================
-   Init
-   ============================================================ */
 export function initPlaylist() {
   setOnEndedCallback(() => {
+    const cur = state.playlist[state.currentIndex];
+    if (cur) { cur.progress = 1; const li = rowCache.get(cur.id); if (li) updateProgress(li, cur); }
     if (state.currentIndex < state.playlist.length - 1) loadVideo(state.currentIndex + 1);
   });
   setOnDurationCallback(renderPlaylist);
 
-  // The old header "save all links" bookmark button was removed as a
-  // feature (saving is now per-video, via each row's bookmark). Remove
-  // its leftover markup if index.html still has it, so it can't show up
-  // as a dead button.
   const legacySaveBtn = document.getElementById('saveLinksBtn');
   if (legacySaveBtn) legacySaveBtn.remove();
 
@@ -859,6 +861,7 @@ export function initPlaylist() {
   wireSavedPlaylists();
   wireUrlAdd();
   wireNativeDurationTracking();
+  startProgressTracking();
 
   restoreSavedLinks();
   renderPlaylist();
