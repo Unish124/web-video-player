@@ -1,4 +1,4 @@
-const CACHE = 'lvp-v1.0.2';
+const CACHE = 'lvp-v1.0.3';
 const ASSETS = [
   './',
   'index.html',
@@ -39,8 +39,9 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const target = req.mode === 'navigate' ? req.url : req;
   e.respondWith(
-    fetch(req)
+    fetch(target, { cache: 'no-cache' })
       .then((res) => {
         if (res.status === 200) {
           const copy = res.clone();

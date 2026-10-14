@@ -1,5 +1,5 @@
 /* install.js: app install, "open with" file launches and the default-player dialog */
-import { state } from './core.js';
+import { state, dropZone, showToast } from './core.js';
 import { handleFiles, loadVideo } from './playlist.js';
 
 let deferredPrompt = null;
@@ -76,9 +76,27 @@ function wireInstallEvents() {
 
 function registerServiceWorker() {
   const secure = location.protocol === 'https:' || location.hostname === 'localhost';
-  if ('serviceWorker' in navigator && secure) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  if (!('serviceWorker' in navigator) || !secure) return;
+
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    if (state.playlist.length === 0 && !dropZone.classList.contains('hidden')) {
+      reloading = true;
+      location.reload();
+    } else {
+      showToast('A new version is ready. Refresh the page to use it.');
+    }
+  });
+
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) reg.update().catch(() => {});
+    });
+    setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000);
+  }).catch(() => {});
 }
 
 function wireFileLaunch() {
