@@ -1131,3 +1131,55 @@ body.lvp-no-select{ user-select:none; }
   .time-display{ display:none; }
   .shortcuts-grid{ grid-template-columns:1fr; }
 }
+
+.drop-footer{
+  position:absolute;left:0;right:0;bottom:18px;
+  display:flex;justify-content:center;gap:22px;flex-wrap:wrap;
+  padding:0 16px;
+}
+.drop-footer-link{
+  background:none;border:none;padding:4px 2px;
+  color:var(--text-dim);font-size:.82rem;font-family:inherit;
+  text-decoration:none;cursor:pointer;
+  border-bottom:1px solid transparent;
+  transition:color var(--dur-fast) var(--ease-smooth), border-color var(--dur-fast) var(--ease-smooth);
+}
+.drop-footer-link:hover{ color:#fff;border-bottom-color:rgba(255,255,255,.4); }
+
+.shortcuts-guide-link{
+  display:block;margin-top:14px;text-align:center;
+  color:#9ecbff;font-size:.85rem;text-decoration:none;
+}
+.shortcuts-guide-link:hover{ text-decoration:underline; }
+
+.dp-card{ max-width:520px; }
+.dp-intro{ margin:0 0 14px;color:var(--text-dim);font-size:.9rem;line-height:1.5; }
+.dp-steps{ margin:0;padding:0;list-style:none;counter-reset:dp; }
+.dp-steps li{
+  counter-increment:dp;position:relative;
+  padding:0 0 14px 38px;
+}
+.dp-steps li::before{
+  content:counter(dp);
+  position:absolute;left:0;top:0;
+  width:26px;height:26px;border-radius:50%;
+  background:var(--accent);color:#fff;
+  font-size:.8rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+.dp-step-title{ font-weight:600;margin-bottom:4px; }
+.dp-step-text{ color:var(--text-dim);font-size:.86rem;line-height:1.5; }
+.dp-step-text b{ color:#fff;font-weight:600; }
+.dp-btn{
+  display:inline-block;margin-top:8px;
+  background:#fff;color:#111;border:none;
+  padding:7px 16px;border-radius:16px;
+  font-size:.85rem;font-weight:600;font-family:inherit;
+  cursor:pointer;text-decoration:none;
+  transition:filter var(--dur-base) var(--ease-smooth), transform var(--dur-fast) var(--ease-spring);
+}
+.dp-btn:hover:not(:disabled){ filter:brightness(.9);transform:translateY(-1px); }
+.dp-btn:disabled{ opacity:.45;cursor:default; }
+.dp-status{ margin-top:8px;color:var(--text-dim);font-size:.8rem;line-height:1.45; }
+.dp-note{ margin:4px 0 0;color:var(--text-dim);font-size:.8rem;line-height:1.5; }
+.dp-note a{ color:#9ecbff; }

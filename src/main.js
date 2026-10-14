@@ -11,6 +11,7 @@ import {
 } from './controls.js';
 import { initPlaylist, handleFiles, loadVideo, closeUrlModal } from './playlist.js';
 import { initStudyTimer } from './study-timer.js';
+import { initInstall } from './install.js';
 
 const SHORTCUTS = [
   ['Space / K', 'Play / pause'],
@@ -217,3 +218,4 @@ initMedia();
 initControls();
 initPlaylist();
 initStudyTimer();
+initInstall();
