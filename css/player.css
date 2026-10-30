@@ -1078,9 +1078,16 @@ body.lvp-no-select{ user-select:none; }
   z-index:1;
   overflow:hidden;
 }
-#facebookPlayerContainer .fb-video,
+#facebookPlayerContainer .fb-video{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  transform-origin:center center;
+  background:#000;
+}
 #facebookPlayerContainer .fb-video > span,
-#facebookPlayerContainer .fb-video iframe{ width:100% !important;height:100% !important;border:none;display:block; }
+#facebookPlayerContainer .fb-video iframe{ display:block;border:none; }
+.player-wrapper.fb-mode .top-bar{ background:rgba(0,0,0,.9); }
+.player-wrapper.fb-native .gesture-layer{ pointer-events:none; }
 .player-wrapper.fb-mode #facebookPlayerContainer{ display:block; }
 .player-wrapper.fb-mode #video{ display:none !important; }
 .yt-badge.fb-badge{ background:#1877f2; }

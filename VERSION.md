@@ -1,4 +1,8 @@
-# Version v1.0.7
+# Version v1.0.8
+
+- Facebook videos, fixes: (1) Playback: if the browser blocks auto-play, the player now says so and lets you click the Facebook video directly to start it; after that, the player's own play/pause, seek and shortcuts work. The play/pause state also keeps itself in sync if Facebook's events are missed. (2) Aspect ratio: the video is now scaled to fit the player with correct proportions (no stretching), portrait and landscape. (3) Title: Facebook's own header no longer overlaps the player's title bar; titles use the page name from the link when available, and any video can be renamed (three-dot menu > Rename, or double-click the title). Renames are saved with saved playlists.
+
+## Earlier: v1.0.7
 
 - Facebook videos are now detected and supported. Paste a public Facebook video link (facebook.com/watch, /videos/, /reel/, /share/v/, fb.watch, m.facebook.com ...) and it is embedded with Facebook's own player, driven by the player's custom controls: play/pause, seek, progress bar, volume/mute, time and duration, loop, A-B loop, resume position, playlist, saving to playlists. Not available for Facebook: playback speed and picture-in-picture (Facebook's player does not expose them). Only public videos that allow embedding can play. Facebook links that are not videos (profiles, pages) show a clear message instead of failing silently.
 - Settings menu: opening Playback speed, Skip amount, Button size (and going back) now plays the exact same pop animation as clicking the gear icon (spring scale and fade from the bottom-right corner), replacing the sideways slide.

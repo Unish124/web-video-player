@@ -17,6 +17,13 @@ let fbPlaying = false;
 let fbCurrentId = null;
 let fbSeq = 0;
 let fbHandles = [];
+let fbEventsSeen = false;
+let fbWantPlay = false;
+let fbWatchTimer = null;
+let fbPollTimer = null;
+let fbLastPos = -1;
+let fbStill = 0;
+let fbResizeObs = null;
 const fbContainer = document.getElementById('facebookPlayerContainer');
 
 export function parseFacebookUrl(u) {
@@ -64,12 +71,12 @@ export function mediaSeek(t) {
   else { video.currentTime = t; }
 }
 export function mediaPlay() {
-  if (isCurrentFacebook()) { fbCall('play'); return; }
+  if (isCurrentFacebook()) { fbWantPlay = true; fbCall('play'); watchFbStart(); return; }
   if (isCurrentYouTube()) { if (ytPlayer && ytPlayer.playVideo) ytPlayer.playVideo(); }
   else { video.play().catch(() => {}); }
 }
 export function mediaPause() {
-  if (isCurrentFacebook()) { fbCall('pause'); return; }
+  if (isCurrentFacebook()) { fbWantPlay = false; fbCall('pause'); return; }
   if (isCurrentYouTube()) { if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo(); }
   else { video.pause(); }
 }
@@ -233,13 +240,74 @@ function initFbSdk() {
   }
 }
 
+function setFbNative(on) {
+  playerWrapper.classList.toggle('fb-native', !!on);
+}
+
+function setFbPlaying(p) {
+  if (fbPlaying === p) return;
+  fbPlaying = p;
+  if (p) {
+    setFbNative(false);
+    video.dispatchEvent(new Event('play'));
+    video.dispatchEvent(new Event('playing'));
+  } else {
+    video.dispatchEvent(new Event('pause'));
+  }
+}
+
+function watchFbStart() {
+  clearTimeout(fbWatchTimer);
+  fbWatchTimer = setTimeout(() => {
+    if (!isCurrentFacebook() || fbPlaying || !fbWantPlay) return;
+    setFbNative(true);
+    showToast('Facebook blocked auto-play \u2014 click the video once to start it');
+  }, 1600);
+}
+
+function startFbPoll() {
+  clearInterval(fbPollTimer);
+  fbLastPos = -1;
+  fbStill = 0;
+  fbPollTimer = setInterval(() => {
+    if (!fbPlayer || !isCurrentFacebook()) return;
+    refreshFbDuration();
+    if (fbEventsSeen) return;
+    const t = fbCall('getCurrentPosition');
+    if (typeof t !== 'number') return;
+    if (fbLastPos >= 0 && Math.abs(t - fbLastPos) > 0.05) { fbStill = 0; setFbPlaying(true); }
+    else if (++fbStill >= 3) setFbPlaying(false);
+    fbLastPos = t;
+  }, 400);
+}
+
+function fitFb() {
+  if (!fbContainer) return;
+  const box = fbContainer.querySelector('.fb-video');
+  const inner = box && (box.querySelector('iframe') || box.querySelector('span'));
+  if (!box || !inner) return;
+  const w = inner.offsetWidth, h = inner.offsetHeight;
+  const cw = fbContainer.clientWidth, ch = fbContainer.clientHeight;
+  if (!w || !h || !cw || !ch) return;
+  const scale = Math.min(cw / w, ch / h);
+  box.style.width = w + 'px';
+  box.style.height = h + 'px';
+  box.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+}
+
 function destroyFbPlayer() {
   fbHandles.forEach(h => { try { h && h.release && h.release(); } catch (e) {} });
   fbHandles = [];
+  clearTimeout(fbWatchTimer);
+  clearInterval(fbPollTimer);
+  if (fbResizeObs) { try { fbResizeObs.disconnect(); } catch (e) {} fbResizeObs = null; }
   if (fbPlayer) { try { fbPlayer.pause(); } catch (e) {} }
   fbPlayer = null;
   fbPlaying = false;
+  fbEventsSeen = false;
+  fbWantPlay = false;
   fbCurrentId = null;
+  setFbNative(false);
   if (fbContainer) fbContainer.innerHTML = '';
 }
 
@@ -248,18 +316,26 @@ function createFbPlayer(url, autoplay) {
   if (!fbContainer) return;
   const id = 'fbVideo' + (++fbSeq);
   fbCurrentId = id;
+  fbWantPlay = !!autoplay;
   const el = document.createElement('div');
   el.className = 'fb-video';
   el.id = id;
-  el.setAttribute('data-href', parseFacebookUrl(url) ? parseFacebookUrl(url).url : url);
-  el.setAttribute('data-width', String(Math.max(220, Math.round(fbContainer.clientWidth || playerWrapper.clientWidth || 640))));
+  const parsed = parseFacebookUrl(url);
+  el.setAttribute('data-href', parsed ? parsed.url : url);
+  el.setAttribute('data-width', String(Math.max(220, Math.min(1000, Math.round(fbContainer.clientWidth || playerWrapper.clientWidth || 640)))));
   el.setAttribute('data-show-text', 'false');
   el.setAttribute('data-allowfullscreen', 'false');
   el.setAttribute('data-autoplay', autoplay ? 'true' : 'false');
   el.setAttribute('data-lazy', 'false');
   fbContainer.appendChild(el);
+  if (window.ResizeObserver) {
+    fbResizeObs = new ResizeObserver(() => fitFb());
+    fbResizeObs.observe(fbContainer);
+    fbResizeObs.observe(el);
+  }
   try { window.FB.XFBML.parse(fbContainer); }
   catch (e) { showToast('Could not start the Facebook player'); }
+  if (autoplay) watchFbStart();
 }
 
 function refreshFbDuration() {
@@ -276,36 +352,29 @@ function refreshFbDuration() {
 function onFbReady(inst) {
   fbPlayer = inst;
   const sub = (name, fn) => {
-    try { fbHandles.push(inst.subscribe(name, fn)); } catch (e) {}
+    try { fbHandles.push(inst.subscribe(name, () => { fbEventsSeen = true; fn(); })); } catch (e) {}
   };
-  sub('startedPlaying', () => {
-    fbPlaying = true;
-    refreshFbDuration();
-    video.dispatchEvent(new Event('play'));
-    video.dispatchEvent(new Event('playing'));
-  });
-  sub('paused', () => {
-    fbPlaying = false;
-    video.dispatchEvent(new Event('pause'));
-  });
+  sub('startedPlaying', () => { refreshFbDuration(); setFbPlaying(true); });
+  sub('paused', () => setFbPlaying(false));
   sub('startedBuffering', () => video.dispatchEvent(new Event('waiting')));
   sub('finishedBuffering', () => {
     refreshFbDuration();
     if (fbPlaying) video.dispatchEvent(new Event('playing'));
   });
   sub('finishedPlaying', () => {
-    fbPlaying = false;
     if (state.loopOne) {
       fbCall('seek', 0);
       fbCall('play');
     } else {
-      video.dispatchEvent(new Event('pause'));
+      setFbPlaying(false);
       if (onEndedCallback) onEndedCallback();
     }
   });
   sub('error', () => {
     showToast('Facebook could not play this video \u2014 it must be public and allow embedding');
   });
+  startFbPoll();
+  fitFb();
 
   const muted = video.muted || video.volume === 0;
   fbCall('setVolume', muted ? 0 : video.volume);

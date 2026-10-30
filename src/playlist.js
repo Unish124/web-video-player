@@ -269,6 +269,29 @@ function startProgressTracking() {
   }, 1000);
 }
 
+function renameItem(item) {
+  const next = window.prompt('Video title', item.name || '');
+  if (next === null) return;
+  const name = next.trim();
+  if (!name || name === item.name) return;
+  item.name = name;
+  item.metaTried = true;
+  if (item.isRemote && item.url) {
+    const arr = loadPlaylists();
+    let changed = false;
+    arr.forEach(pl => (pl.links || []).forEach(l => { if (l.url === item.url) { l.name = name; changed = true; } }));
+    if (changed) persistPlaylists(arr);
+  }
+  const cur = state.playlist[state.currentIndex];
+  if (cur && cur.id === item.id) {
+    videoTitle.textContent = name;
+    document.title = name + ' \u2014 Local Video Player';
+  }
+  renderPlaylist();
+  if (savedItemsEl && !savedItemsEl.classList.contains('hidden')) renderSavedList();
+  showToast('Renamed');
+}
+
 function openRowMenu(item, anchorEl) {
   if (saveMenuEl && rowMenuAnchor === anchorEl) { closeSaveMenu(); return; }
   closeSaveMenu();
@@ -305,6 +328,10 @@ function openRowMenu(item, anchorEl) {
     addEntry(label, () => { closeSaveMenu(); onSaveButtonClick(item, anchorEl); });
     addDivider();
   }
+  addEntry('Rename\u2026', () => {
+    closeSaveMenu();
+    renameItem(item);
+  });
   addEntry('Move to top', () => {
     closeSaveMenu();
     sorter.animateChange(() => { applyMove(index, 0); renderPlaylist(); });
@@ -804,6 +831,16 @@ function nameFromUrl(u) {
     return decodeURIComponent(parts[parts.length - 1] || parsed.hostname) || 'Video from URL';
   } catch (e) { return 'Video from URL'; }
 }
+function facebookNameFromUrl(u) {
+  try {
+    const segs = new URL(u).pathname.split('/').filter(Boolean);
+    const skip = ['watch', 'reel', 'reels', 'share', 'video.php', 'videos', 'v', 'r', 'p'];
+    if (segs.length && !skip.includes(segs[0].toLowerCase()) && /^[A-Za-z][\w.-]{2,}$/.test(segs[0])) {
+      return 'Facebook video \u2014 ' + segs[0];
+    }
+  } catch (e) {}
+  return 'Facebook video';
+}
 function getYouTubeId(u) {
   try {
     const parsed = new URL(u);
@@ -841,7 +878,7 @@ function addUrlToPlaylist(rawUrl, errorEl) {
   const wasEmpty = state.playlist.length === 0;
   state.playlist.push({
     id: uid(),
-    name: youtubeId ? 'YouTube video' : (fb ? 'Facebook video' : nameFromUrl(u)),
+    name: youtubeId ? 'YouTube video' : (fb ? facebookNameFromUrl(fb.url) : nameFromUrl(u)),
     url: fb ? fb.url : u,
     file: null,
     isRemote: true,
@@ -919,6 +956,12 @@ function wireNativeDurationTracking() {
 }
 
 export function initPlaylist() {
+  videoTitle.title = 'Double-click to rename';
+  videoTitle.addEventListener('dblclick', () => {
+    const cur = state.playlist[state.currentIndex];
+    if (cur) renameItem(cur);
+  });
+
   setOnEndedCallback(() => {
     const cur = state.playlist[state.currentIndex];
     if (cur) { cur.progress = 1; const li = rowCache.get(cur.id); if (li) updateProgress(li, cur); }
