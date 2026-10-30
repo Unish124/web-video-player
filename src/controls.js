@@ -19,7 +19,7 @@ import {
 } from './core.js';
 import {
   mediaPlay, mediaPause, mediaSeek, mediaDuration, mediaCurrentTime,
-  isPausedNow, isCurrentYouTube, mediaSetVolume, mediaSetMuted,
+  isPausedNow, isCurrentYouTube, isCurrentFacebook, isCurrentEmbed, mediaSetVolume, mediaSetMuted,
   mediaSetPlaybackRate
 } from './media.js';
 import { onMultiFeatureToggled } from './playlist.js';
@@ -201,13 +201,13 @@ function wireProgressBar() {
   video.addEventListener('timeupdate', () => { if (!state.isScrubbing) updateProgress(); });
   video.addEventListener('progress', updateProgress);
 
-  setInterval(() => { if (isCurrentYouTube()) updateYtProgressUI(); }, 250);
+  setInterval(() => { if (isCurrentEmbed()) updateYtProgressUI(); }, 250);
 
   progressBar.addEventListener('mousemove', (e) => {
     const ratio = ratioFromEvent(e);
     hoverBar.style.width = (ratio * 100) + '%';
     hoverBar.style.display = 'block';
-    if (isCurrentYouTube()) {
+    if (isCurrentEmbed()) {
       progressTooltip.style.display = 'none';
       clearTimeout(hoverThumbTimer);
       return;
@@ -304,6 +304,7 @@ function wireVolume() {
 export function setSpeed(s) {
   video.playbackRate = s;
   mediaSetPlaybackRate(s);
+  if (isCurrentFacebook() && s !== 1) showToast('Playback speed isn\'t available for Facebook videos');
   Array.from(speedOptions.children).forEach(opt => {
     opt.classList.toggle('selected', parseFloat(opt.dataset.speed) === s);
   });
@@ -388,44 +389,25 @@ function buildButtonSizeOptions() {
   if (btnSizeRowValue) btnSizeRowValue.textContent = BTN_SIZES.find(b => b.id === state.buttonSize).label;
 }
 
-let panelSwitchTimer = null;
+let panelPopTimer = null;
+function playMenuPop() {
+  clearTimeout(panelPopTimer);
+  settingsMenu.classList.remove('panel-pop');
+  void settingsMenu.offsetWidth;
+  settingsMenu.classList.add('panel-pop');
+  panelPopTimer = setTimeout(() => settingsMenu.classList.remove('panel-pop'), 320);
+}
 function showSettingsPanel(id, instant) {
   const panels = [settingsMainPanel, settingsSpeedPanel, settingsSkipPanel, settingsBtnSizePanel].filter(Boolean);
   const target = panels.find(p => p.id === id);
   const current = panels.find(p => p.classList.contains('active'));
   if (!target || target === current) return;
 
-  clearTimeout(panelSwitchTimer);
-  panels.forEach(p => p.classList.remove('leaving-fwd', 'leaving-back', 'entering-fwd', 'entering-back'));
-  settingsMenu.classList.remove('is-resizing');
-  settingsMenu.style.height = '';
-
-  if (instant || !current || settingsMenu.classList.contains('hidden')) {
-    panels.forEach(p => p.classList.toggle('active', p === target));
-    settingsMenu.scrollTop = 0;
-    return;
-  }
-
-  const forward = current === settingsMainPanel;
-  const startH = settingsMenu.offsetHeight;
-  current.classList.remove('active');
-  current.classList.add(forward ? 'leaving-fwd' : 'leaving-back');
-  target.classList.add('active', forward ? 'entering-fwd' : 'entering-back');
+  panels.forEach(p => p.classList.toggle('active', p === target));
   settingsMenu.scrollTop = 0;
 
-  const endH = settingsMenu.offsetHeight;
-  if (Math.abs(endH - startH) > 1) {
-    settingsMenu.classList.add('is-resizing');
-    settingsMenu.style.height = startH + 'px';
-    void settingsMenu.offsetHeight;
-    settingsMenu.style.height = endH + 'px';
-  }
-
-  panelSwitchTimer = setTimeout(() => {
-    panels.forEach(p => p.classList.remove('leaving-fwd', 'leaving-back', 'entering-fwd', 'entering-back'));
-    settingsMenu.classList.remove('is-resizing');
-    settingsMenu.style.height = '';
-  }, 260);
+  if (instant || !current || settingsMenu.classList.contains('hidden')) return;
+  playMenuPop();
 }
 function wireSettingsNavigation() {
   if (settingsMainPanel) {
@@ -444,6 +426,8 @@ function wireSettingsMenu() {
   settingsBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const wasHidden = settingsMenu.classList.contains('hidden');
+    clearTimeout(panelPopTimer);
+    settingsMenu.classList.remove('panel-pop');
     settingsMenu.classList.toggle('hidden');
     if (wasHidden && !settingsMenu.classList.contains('hidden')) showSettingsPanel('settingsMainPanel', true);
   });
@@ -580,8 +564,8 @@ export function togglePip() {
 function wirePip() {
   if (!document.pictureInPictureEnabled) pipBtn.style.display = 'none';
   pipBtn.addEventListener('click', async () => {
-    if (isCurrentYouTube()) {
-      showToast('Picture-in-picture isn\'t available for YouTube videos');
+    if (isCurrentEmbed()) {
+      showToast('Picture-in-picture isn\'t available for YouTube or Facebook videos');
       return;
     }
     try {

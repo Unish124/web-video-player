@@ -9,7 +9,7 @@ import {
   newPlaylistOverlay, newPlaylistInput, newPlaylistAddBtn, newPlaylistCloseBtn,
   fmtTime, showToast, uid, escapeHtml
 } from './core.js';
-import { loadMediaItem, saveCurrentPosition, setOnEndedCallback, setOnDurationCallback, mediaDuration, mediaCurrentTime } from './media.js';
+import { loadMediaItem, saveCurrentPosition, setOnEndedCallback, setOnDurationCallback, mediaDuration, mediaCurrentTime, parseFacebookUrl, stopEmbeds } from './media.js';
 import { ensureThumbnail, ensureYouTubeMeta } from './thumbs.js';
 import { initPlaylistSort } from './playlist-sort.js';
 
@@ -68,7 +68,7 @@ function removeFromPlaylist(id) {
     if (state.playlist.length === 0) {
       state.currentIndex = -1;
       video.removeAttribute('src');
-      playerWrapper.classList.remove('yt-mode');
+      stopEmbeds();
       videoTitle.textContent = 'No video loaded';
       playerWrapper.classList.add('hidden');
       playlistPanel.classList.add('hidden');
@@ -86,7 +86,17 @@ let sorter = null;
 const KEBAB_SVG = '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>';
 const HANDLE_SVG = '<svg viewBox="0 0 24 24"><path d="M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z"/></svg>';
 
+function linkType(link) {
+  return link && link.type === 'youtube' ? 'youtube' : (link && link.type === 'facebook' ? 'facebook' : 'video');
+}
+function defaultLinkName(type, url) {
+  return type === 'youtube' ? 'YouTube video' : (type === 'facebook' ? 'Facebook video' : nameFromUrl(url));
+}
+
 function subtitleHtml(item) {
+  if (item.type === 'facebook') {
+    return '<span class="yt-badge fb-badge">Facebook</span>';
+  }
   if (item.type === 'youtube') {
     return item.author
       ? escapeHtml(item.author) + '<span class="yt-badge yt-badge-sep">YouTube</span>'
@@ -542,11 +552,11 @@ function updateSavedCountBadge() {
 function linkToItem(link) {
   return {
     id: uid(),
-    name: link.name || (link.type === 'youtube' ? 'YouTube video' : nameFromUrl(link.url)),
+    name: link.name || defaultLinkName(linkType(link), link.url),
     url: link.url,
     file: null,
     isRemote: true,
-    type: link.type === 'youtube' ? 'youtube' : 'video',
+    type: linkType(link),
     youtubeId: link.youtubeId || null,
     duration: null
   };
@@ -622,11 +632,11 @@ function loadSavedLink(playlistId, url) {
   if (idx === -1) {
     state.playlist.push({
       id: uid(),
-      name: link.name || (link.type === 'youtube' ? 'YouTube video' : nameFromUrl(link.url)),
+      name: link.name || defaultLinkName(linkType(link), link.url),
       url: link.url,
       file: null,
       isRemote: true,
-      type: link.type === 'youtube' ? 'youtube' : 'video',
+      type: linkType(link),
       youtubeId: link.youtubeId || null,
       duration: null
     });
@@ -663,14 +673,15 @@ function renderSavedList() {
     const li = document.createElement('li');
     li.className = 'playlist-item';
     const isYoutube = link.type === 'youtube';
-    const displayName = link.name || (isYoutube ? 'YouTube video' : nameFromUrl(link.url));
+    const isFacebook = link.type === 'facebook';
+    const displayName = link.name || defaultLinkName(linkType(link), link.url);
     li.innerHTML = `
       <div class="thumb">
         ${isYoutube && link.youtubeId ? `<img class="thumb-img" alt="" src="https://i.ytimg.com/vi/${encodeURIComponent(link.youtubeId)}/mqdefault.jpg" onerror="this.remove()">` : ''}
         <svg class="thumb-ph" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       </div>
       <div class="meta">
-        <div class="name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}${isYoutube ? '<span class="yt-badge">YouTube</span>' : ' <span style="color:#666;">(URL)</span>'}</div>
+        <div class="name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}${isYoutube ? '<span class="yt-badge">YouTube</span>' : (isFacebook ? '<span class="yt-badge fb-badge">Facebook</span>' : ' <span style="color:#666;">(URL)</span>')}</div>
       </div>
       <div class="item-actions">
         <button class="load-btn" title="Play" tabindex="-1">
@@ -821,14 +832,20 @@ function addUrlToPlaylist(rawUrl, errorEl) {
     return;
   }
   const youtubeId = getYouTubeId(u);
+  const fb = youtubeId ? null : parseFacebookUrl(u);
+  if (fb && !fb.isVideo) {
+    if (errorEl) errorEl.textContent = 'That Facebook link doesn\'t look like a video. Open the video on Facebook and copy its link (Share \u2192 Copy link).';
+    return;
+  }
+  const embedded = !!youtubeId || !!fb;
   const wasEmpty = state.playlist.length === 0;
   state.playlist.push({
     id: uid(),
-    name: youtubeId ? 'YouTube video' : nameFromUrl(u),
-    url: u,
+    name: youtubeId ? 'YouTube video' : (fb ? 'Facebook video' : nameFromUrl(u)),
+    url: fb ? fb.url : u,
     file: null,
     isRemote: true,
-    type: youtubeId ? 'youtube' : 'video',
+    type: youtubeId ? 'youtube' : (fb ? 'facebook' : 'video'),
     youtubeId: youtubeId || null,
     duration: null
   });
@@ -840,8 +857,8 @@ function addUrlToPlaylist(rawUrl, errorEl) {
     state.playlistOpen = true;
   }
   if (wasEmpty) loadVideo(state.playlist.length - 1);
-  else showToast(youtubeId ? 'Added YouTube video' : 'Added video from URL');
-  if (!youtubeId) video.addEventListener('error', onRemoteVideoError, { once: true });
+  else showToast(youtubeId ? 'Added YouTube video' : (fb ? 'Added Facebook video' : 'Added video from URL'));
+  if (!embedded) video.addEventListener('error', onRemoteVideoError, { once: true });
 }
 
 export function closeUrlModal() {

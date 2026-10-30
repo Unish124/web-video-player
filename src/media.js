@@ -9,32 +9,72 @@ let pendingYtLoad = null;
 let onEndedCallback = null;
 let onDurationCallback = null;
 
+let fbPlayer = null;
+let fbSdkReady = false;
+let fbSdkLoading = false;
+let fbPending = null;
+let fbPlaying = false;
+let fbCurrentId = null;
+let fbSeq = 0;
+let fbHandles = [];
+const fbContainer = document.getElementById('facebookPlayerContainer');
+
+export function parseFacebookUrl(u) {
+  let p;
+  try { p = new URL(u); } catch (e) { return null; }
+  if (!/^https?:$/.test(p.protocol)) return null;
+  const host = p.hostname.toLowerCase();
+  if (host === 'fb.watch') return { url: p.origin + p.pathname + p.search, isVideo: p.pathname.length > 1 };
+  if (!/(^|\.)(facebook\.com|fb\.com)$/.test(host)) return null;
+  const path = p.pathname;
+  const isVideo = /\/(videos?|reels?|watch)(\/|$)/i.test(path) || /\/share\/(v|r)\//i.test(path) || (/^\/video\.php/i.test(path) && p.searchParams.has('v'));
+  return { url: 'https://www.facebook.com' + path + p.search, isVideo };
+}
+
+export function isCurrentFacebook() {
+  const item = state.playlist[state.currentIndex];
+  return !!(item && item.type === 'facebook');
+}
+export function isCurrentEmbed() {
+  return isCurrentYouTube() || isCurrentFacebook();
+}
+function fbCall(name, ...args) {
+  try { if (fbPlayer && typeof fbPlayer[name] === 'function') return fbPlayer[name](...args); } catch (e) {}
+  return undefined;
+}
+
 export function isCurrentYouTube() {
   const item = state.playlist[state.currentIndex];
   return !!(item && item.type === 'youtube');
 }
 
 export function mediaDuration() {
+  if (isCurrentFacebook()) { const d = fbCall('getDuration'); return (typeof d === 'number' && d > 0) ? d : NaN; }
   if (isCurrentYouTube()) return (ytPlayer && ytPlayer.getDuration) ? ytPlayer.getDuration() : NaN;
   return video.duration;
 }
 export function mediaCurrentTime() {
+  if (isCurrentFacebook()) { const t = fbCall('getCurrentPosition'); return typeof t === 'number' ? t : 0; }
   if (isCurrentYouTube()) return (ytPlayer && ytPlayer.getCurrentTime) ? ytPlayer.getCurrentTime() : 0;
   return video.currentTime;
 }
 export function mediaSeek(t) {
+  if (isCurrentFacebook()) { fbCall('seek', t); return; }
   if (isCurrentYouTube()) { if (ytPlayer && ytPlayer.seekTo) ytPlayer.seekTo(t, true); }
   else { video.currentTime = t; }
 }
 export function mediaPlay() {
+  if (isCurrentFacebook()) { fbCall('play'); return; }
   if (isCurrentYouTube()) { if (ytPlayer && ytPlayer.playVideo) ytPlayer.playVideo(); }
   else { video.play().catch(() => {}); }
 }
 export function mediaPause() {
+  if (isCurrentFacebook()) { fbCall('pause'); return; }
   if (isCurrentYouTube()) { if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo(); }
   else { video.pause(); }
 }
 export function isPausedNow() {
+  if (isCurrentFacebook()) return !fbPlaying;
   if (isCurrentYouTube()) {
     if (!ytPlayer || !ytPlayer.getPlayerState) return true;
     return ytPlayer.getPlayerState() !== 1;
@@ -43,9 +83,11 @@ export function isPausedNow() {
 }
 
 export function mediaSetVolume(vol) {
+  if (isCurrentFacebook()) { fbCall('setVolume', Math.max(0, Math.min(1, vol))); return; }
   if (isCurrentYouTube() && ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(Math.round(vol * 100));
 }
 export function mediaSetMuted(muted) {
+  if (isCurrentFacebook()) { fbCall(muted ? 'mute' : 'unmute'); return; }
   if (!isCurrentYouTube() || !ytPlayer) return;
   if (muted) { if (ytPlayer.mute) ytPlayer.mute(); }
   else { if (ytPlayer.unMute) ytPlayer.unMute(); }
@@ -92,7 +134,30 @@ export function saveCurrentPosition() {
 export function loadMediaItem(item, autoplay) {
   video.dispatchEvent(new CustomEvent('lvp:itemloading'));
 
-  if (item.type === 'youtube') {
+  if (item.type !== 'facebook') {
+    fbPending = null;
+    destroyFbPlayer();
+    playerWrapper.classList.remove('fb-mode');
+  }
+
+  if (item.type === 'facebook') {
+    video.pause();
+    video.removeAttribute('src');
+    thumbVideo.removeAttribute('src');
+    try { tooltipCanvas.getContext('2d').clearRect(0, 0, tooltipCanvas.width, tooltipCanvas.height); } catch (e) {}
+    if (ytPlayer && ytPlayer.pauseVideo) { try { ytPlayer.pauseVideo(); } catch (e) {} }
+    pendingYtLoad = null;
+    setYtIframeVisible(false);
+    playerWrapper.classList.remove('yt-mode');
+    playerWrapper.classList.add('fb-mode');
+    const wantFbAutoplay = autoplay !== false;
+    if (fbSdkReady && window.FB && window.FB.XFBML) {
+      createFbPlayer(item.url, wantFbAutoplay);
+    } else {
+      fbPending = { url: item.url, autoplay: wantFbAutoplay };
+      loadFacebookSdk();
+    }
+  } else if (item.type === 'youtube') {
     video.pause();
     video.removeAttribute('src');
     thumbVideo.removeAttribute('src');
@@ -133,6 +198,136 @@ export function loadMediaItem(item, autoplay) {
     }
     if (autoplay !== false) video.play().catch(() => {});
   }
+}
+
+function loadFacebookSdk() {
+  if (window.FB && window.FB.XFBML) { initFbSdk(); return; }
+  if (fbSdkLoading) return;
+  fbSdkLoading = true;
+  window.fbAsyncInit = initFbSdk;
+  const tag = document.createElement('script');
+  tag.async = true;
+  tag.defer = true;
+  tag.crossOrigin = 'anonymous';
+  tag.src = 'https://connect.facebook.net/en_US/sdk.js';
+  tag.onerror = () => {
+    fbSdkLoading = false;
+    showToast('Could not load Facebook player \u2014 check your connection or ad blocker');
+  };
+  document.head.appendChild(tag);
+}
+
+function initFbSdk() {
+  if (fbSdkReady) return;
+  try { window.FB.init({ xfbml: false, version: 'v19.0' }); } catch (e) {}
+  fbSdkReady = true;
+  try {
+    window.FB.Event.subscribe('xfbml.ready', (msg) => {
+      if (msg && msg.type === 'video' && msg.id === fbCurrentId) onFbReady(msg.instance);
+    });
+  } catch (e) {}
+  if (fbPending) {
+    const { url, autoplay } = fbPending;
+    fbPending = null;
+    createFbPlayer(url, autoplay);
+  }
+}
+
+function destroyFbPlayer() {
+  fbHandles.forEach(h => { try { h && h.release && h.release(); } catch (e) {} });
+  fbHandles = [];
+  if (fbPlayer) { try { fbPlayer.pause(); } catch (e) {} }
+  fbPlayer = null;
+  fbPlaying = false;
+  fbCurrentId = null;
+  if (fbContainer) fbContainer.innerHTML = '';
+}
+
+function createFbPlayer(url, autoplay) {
+  destroyFbPlayer();
+  if (!fbContainer) return;
+  const id = 'fbVideo' + (++fbSeq);
+  fbCurrentId = id;
+  const el = document.createElement('div');
+  el.className = 'fb-video';
+  el.id = id;
+  el.setAttribute('data-href', parseFacebookUrl(url) ? parseFacebookUrl(url).url : url);
+  el.setAttribute('data-width', String(Math.max(220, Math.round(fbContainer.clientWidth || playerWrapper.clientWidth || 640))));
+  el.setAttribute('data-show-text', 'false');
+  el.setAttribute('data-allowfullscreen', 'false');
+  el.setAttribute('data-autoplay', autoplay ? 'true' : 'false');
+  el.setAttribute('data-lazy', 'false');
+  fbContainer.appendChild(el);
+  try { window.FB.XFBML.parse(fbContainer); }
+  catch (e) { showToast('Could not start the Facebook player'); }
+}
+
+function refreshFbDuration() {
+  const dur = fbCall('getDuration');
+  if (typeof dur !== 'number' || !(dur > 0)) return;
+  durTimeEl.textContent = fmtTime(dur);
+  const cur = state.playlist[state.currentIndex];
+  if (cur && cur.type === 'facebook' && cur.duration !== dur) {
+    cur.duration = dur;
+    if (onDurationCallback) onDurationCallback();
+  }
+}
+
+function onFbReady(inst) {
+  fbPlayer = inst;
+  const sub = (name, fn) => {
+    try { fbHandles.push(inst.subscribe(name, fn)); } catch (e) {}
+  };
+  sub('startedPlaying', () => {
+    fbPlaying = true;
+    refreshFbDuration();
+    video.dispatchEvent(new Event('play'));
+    video.dispatchEvent(new Event('playing'));
+  });
+  sub('paused', () => {
+    fbPlaying = false;
+    video.dispatchEvent(new Event('pause'));
+  });
+  sub('startedBuffering', () => video.dispatchEvent(new Event('waiting')));
+  sub('finishedBuffering', () => {
+    refreshFbDuration();
+    if (fbPlaying) video.dispatchEvent(new Event('playing'));
+  });
+  sub('finishedPlaying', () => {
+    fbPlaying = false;
+    if (state.loopOne) {
+      fbCall('seek', 0);
+      fbCall('play');
+    } else {
+      video.dispatchEvent(new Event('pause'));
+      if (onEndedCallback) onEndedCallback();
+    }
+  });
+  sub('error', () => {
+    showToast('Facebook could not play this video \u2014 it must be public and allow embedding');
+  });
+
+  const muted = video.muted || video.volume === 0;
+  fbCall('setVolume', muted ? 0 : video.volume);
+  fbCall(muted ? 'mute' : 'unmute');
+  refreshFbDuration();
+
+  const cur = state.playlist[state.currentIndex];
+  if (state.features.resume && cur && cur.isRemote) {
+    const pos = getPosition(cur.url);
+    const dur = fbCall('getDuration');
+    if (pos > 4 && dur && pos < dur - 2) {
+      fbCall('seek', pos);
+      showToast(`Resumed from ${fmtTime(pos)}`);
+    }
+  }
+}
+
+export function stopEmbeds() {
+  if (ytPlayer && ytPlayer.pauseVideo) { try { ytPlayer.pauseVideo(); } catch (e) {} }
+  fbPending = null;
+  destroyFbPlayer();
+  playerWrapper.classList.remove('yt-mode', 'fb-mode');
 }
 
 function setYtIframeVisible(visible) {

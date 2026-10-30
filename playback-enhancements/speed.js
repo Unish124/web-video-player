@@ -41,7 +41,7 @@ export function initSpeed(deps) {
     const clamped = clampSpeed(v);
     if (clamped == null) return;
     if (isYouTubeActive()) {
-      showToast('Custom speed isn\u2019t available for YouTube videos');
+      showToast('Custom speed isn\u2019t available for YouTube or Facebook videos');
       return;
     }
     nativeVideo.playbackRate = clamped;

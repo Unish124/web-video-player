@@ -39,7 +39,7 @@ function showToastPE(msg) {
 }
 
 function isYouTubeActive() {
-  return nativePlayerWrapper.classList.contains('yt-mode');
+  return nativePlayerWrapper.classList.contains('yt-mode') || nativePlayerWrapper.classList.contains('fb-mode');
 }
 
 function loadBoolPref(key, fallback) {

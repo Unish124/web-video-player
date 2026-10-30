@@ -69,6 +69,7 @@ export function ensureThumbnail(item, onReady, isStillWanted) {
     item.thumb = youtubeThumb(item.youtubeId);
     return;
   }
+  if (item.type === 'facebook') { item.thumbTried = true; return; }
   if (item.thumbQueued) return;
   item.thumbQueued = true;
   queue.push({ item, onReady, isStillWanted });

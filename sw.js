@@ -1,4 +1,4 @@
-const CACHE = 'lvp-v1.0.6';
+const CACHE = 'lvp-v1.0.7';
 const ASSETS = [
   './',
   'index.html',

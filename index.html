@@ -32,7 +32,7 @@
         <button id="urlAddBtn">Add</button>
       </div>
       <div class="url-error" id="urlError"></div>
-      <p class="hint">Everything plays locally in your browser — nothing is uploaded. Paste a YouTube link and it's auto-detected and embedded with YouTube's own player; other links must be direct video files (.mp4, .webm…).</p>
+      <p class="hint">Everything plays locally in your browser — nothing is uploaded. Paste a YouTube or Facebook video link and it's auto-detected and embedded with that site's own player; other links must be direct video files (.mp4, .webm…).</p>
     </div>
     <div class="drop-footer" id="dropFooter">
       <button type="button" class="drop-footer-link" id="defaultPlayerBtn">Set as default video player</button>
@@ -45,6 +45,7 @@
     <video id="thumbVideo" muted hidden crossorigin="anonymous"></video>
     <canvas id="thumbCanvas" width="150" height="84" hidden></canvas>
     <div id="youtubePlayerContainer"><div id="ytPlayerTarget"></div></div>
+    <div id="facebookPlayerContainer"></div>
 
     <div class="gesture-layer" id="gestureLayer">
       <div class="gesture-zone left" id="zoneLeft"></div>
@@ -255,7 +256,7 @@
         <button id="urlModalAddBtn">Add</button>
       </div>
       <div class="url-error" id="urlModalError"></div>
-      <p style="color:#888;font-size:.78rem;margin-top:10px;">Paste a YouTube link (youtube.com or youtu.be) and it's auto-detected and embedded with YouTube's own player. Other links must be direct video files (.mp4, .webm, .ogg) that the host allows browsers to fetch — it won't work with Netflix or other streaming site pages.</p>
+      <p style="color:#888;font-size:.78rem;margin-top:10px;">Paste a YouTube link (youtube.com or youtu.be) or a public Facebook video link (facebook.com, fb.watch) and it's auto-detected and embedded with that site's own player. Other links must be direct video files (.mp4, .webm, .ogg) that the host allows browsers to fetch — it won't work with Netflix or other streaming site pages.</p>
       <button class="shortcuts-close" id="urlModalCloseBtn">Close</button>
     </div>
   </div>

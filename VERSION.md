@@ -1,4 +1,10 @@
-# Version v1.0.6
+# Version v1.0.7
+
+- Facebook videos are now detected and supported. Paste a public Facebook video link (facebook.com/watch, /videos/, /reel/, /share/v/, fb.watch, m.facebook.com ...) and it is embedded with Facebook's own player, driven by the player's custom controls: play/pause, seek, progress bar, volume/mute, time and duration, loop, A-B loop, resume position, playlist, saving to playlists. Not available for Facebook: playback speed and picture-in-picture (Facebook's player does not expose them). Only public videos that allow embedding can play. Facebook links that are not videos (profiles, pages) show a clear message instead of failing silently.
+- Settings menu: opening Playback speed, Skip amount, Button size (and going back) now plays the exact same pop animation as clicking the gear icon (spring scale and fade from the bottom-right corner), replacing the sideways slide.
+- Removing the last playlist item now also stops any YouTube / Facebook playback.
+
+## Earlier: v1.0.6
 
 - Settings menu: opening a section (Playback speed, Skip amount, Button size) and going back now animates: the panels slide and fade, and the menu smoothly resizes to fit. Rows also react when hovered and pressed. Respects the system "reduce motion" setting.
 

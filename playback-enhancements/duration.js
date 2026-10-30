@@ -102,7 +102,7 @@ export function initDuration(deps) {
       const n = rows.length;
       let text = `${n} video${n !== 1 ? 's' : ''} \u2022 ${fmtTime(totalKnown)} total`;
       if (unknownCount) text += ` (+${unknownCount} not yet loaded)`;
-      if (ytCount) text += ` \u2022 ${ytCount} YouTube not counted`;
+      if (ytCount) text += ` \u2022 ${ytCount} YouTube/Facebook not counted`;
       peTotalBadge.textContent = n ? text : '';
     }
   }
