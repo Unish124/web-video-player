@@ -36,7 +36,12 @@
     { id: 'urlModalOverlay',      card: '.shortcuts-card', trigger: ['#addUrlBtn2', '#playlistToggleBtn'] },
     { id: 'featuresOverlay',      card: '.shortcuts-card', trigger: ['#featuresBtn'] },
     { id: 'defaultPlayerOverlay', card: '.shortcuts-card', trigger: ['#defaultPlayerBtn', '#defaultPlayerFeatureBtn'] },
-    { id: 'newPlaylistOverlay',   card: '.shortcuts-card', trigger: ['#addPlaylistTab'] }
+    { id: 'newPlaylistOverlay',   card: '.shortcuts-card', trigger: ['#addPlaylistTab'] },
+    /* pages inside the settings menu: shown with the `active` class instead of `hidden` */
+    { id: 'settingsMainPanel',    active: true, trigger: [] },
+    { id: 'settingsSpeedPanel',   active: true, trigger: [] },
+    { id: 'settingsSkipPanel',    active: true, trigger: [] },
+    { id: 'settingsBtnSizePanel', active: true, trigger: [] }
   ];
 
   const clamp  = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -346,8 +351,11 @@
   let lastAct = null;
 
   document.addEventListener('pointerdown', e => {
-    const b = e.target.closest && e.target.closest('button,[role="button"],.icon-btn,.playlist-tab,.drop-footer-link,a');
-    if (b) lastAct = { el: b, time: performance.now() };
+    const b = e.target.closest && e.target.closest('button,[role="button"],.icon-btn,.playlist-tab,.drop-footer-link,a,.settings-row,.settings-panel-header,[data-back],[data-target]');
+    if (b) {
+      const r = b.getBoundingClientRect();
+      lastAct = { el: b, time: performance.now(), x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width };
+    }
   }, true);
 
   function isVisible(e) {
@@ -362,12 +370,23 @@
       const e = document.querySelector(s);
       if (isVisible(e) && !t.el.contains(e)) { el = e; break; }
     }
-    if (!el && lastAct && performance.now() - lastAct.time < 1500 && isVisible(lastAct.el) && !t.el.contains(lastAct.el)) el = lastAct.el;
+    const recent = lastAct && performance.now() - lastAct.time < 1500;
+    if (!el && recent && isVisible(lastAct.el) && (t.cfg.active || !t.el.contains(lastAct.el))) el = lastAct.el;
+    if (!el && recent && t.cfg.active) return { x: lastAct.x, y: lastAct.y, w: lastAct.w };
     if (el) {
       const r = el.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width };
     }
     return { x: innerWidth / 2, y: innerHeight - 36, w: 44 };   // bottom centre
+  }
+
+  const hiddenOf = t => (t.cfg.active ? !t.el.classList.contains('active') : t.el.classList.contains('hidden'));
+
+  /* a settings page only animates while the settings menu itself is open and still */
+  function pageBlocked(t) {
+    if (!t.cfg.active) return false;
+    const m = targets.find(x => x.el.id === 'settingsMenu');
+    return !m || m.hidden || !!m.anim;
   }
 
   function makeTarget(cfg) {
@@ -376,7 +395,7 @@
     const t = {
       cfg, el,
       overlay: !!cfg.card,
-      hidden: el.classList.contains('hidden'),
+      hidden: cfg.active ? !el.classList.contains('active') : el.classList.contains('hidden'),
       snap: null, rect: null, oRect: null,
       hard: true, soft: false,
       building: null, token: 0, anim: null, timer: 0, trash: []
@@ -400,7 +419,7 @@
       } else hard = true;
     }
     if (classTouched) {
-      const h = t.el.classList.contains('hidden');
+      const h = hiddenOf(t);
       if (h !== t.hidden) {
         t.hidden = h;
         if (h) onClose(t); else onOpen(t);
@@ -468,7 +487,7 @@
   }
 
   async function onOpen(t) {
-    if (!enabled()) return;
+    if (!enabled() || pageBlocked(t)) { release(t); return; }
     const card = t.card();
     if (!card) return;
     const token = ++t.token;
@@ -492,7 +511,7 @@
 
   function onClose(t) {
     ++t.token;
-    if (!enabled()) { release(t); return; }
+    if (!enabled() || pageBlocked(t)) { if (t.anim) startAnim(t, 1); else release(t); return; }
     if (t.anim) { startAnim(t, 1); return; }             // reverse a running open
     if (!t.snap || !t.rect) { release(t); return; }
     hold(t);
