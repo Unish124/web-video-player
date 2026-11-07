@@ -69,6 +69,10 @@
     .genie-hold { opacity: 0 !important; transition: none !important; animation: none !important; pointer-events: none !important; }
     .genie-live { transition: none !important; animation: none !important; }
     .genie-scrim { position: fixed; pointer-events: none; z-index: 2147483645; }
+    .genie-seg { display: inline-flex; flex-shrink: 0; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(128,128,128,.22); }
+    .genie-seg button { border: 0; margin: 0; padding: 5px 13px; border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: .8rem; cursor: pointer; opacity: .7; transition: background .18s, opacity .18s; }
+    .genie-seg button:hover { opacity: 1; }
+    .genie-seg button.on { background: rgba(128,128,128,.55); opacity: 1; }
     #genieCanvas { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 2147483646; display: none; }
   `;
   document.head.appendChild(css);
@@ -690,34 +694,49 @@
   }, 250);
 
   /* ------------------------------------------------------------------ *
-   *  Settings-menu switch: Genie <-> Classic
+   *  "Window animation" switch inside Extra features: Genie <-> Classic
    * ------------------------------------------------------------------ */
-  function label() { return mode === 'genie' ? 'Genie' : 'Classic'; }
+  function syncSwitch() {
+    document.querySelectorAll('#genieModeRow .genie-seg button').forEach(b => {
+      const on = b.dataset.m === mode;
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+      b.classList.toggle('on', on);
+    });
+  }
 
   function setMode(m) {
     if (m !== 'genie' && m !== 'classic') return;
     mode = m;
     try { localStorage.setItem(STORE_KEY, m); } catch (e) { /* ignore */ }
     if (m === 'classic') cancelAll();
-    const v = document.getElementById('genieModeValue');
-    if (v) v.textContent = label();
-    if (m === 'genie') for (const t of targets) if (!t.hidden) { t.hard = true; scheduleRefresh(t, 200); }
+    syncSwitch();
+    if (m === 'genie') for (const t of targets) if (!t.hidden) { t.hard = true; scheduleRefresh(t, 0); }
   }
 
   function injectRow() {
-    const panel = document.getElementById('settingsMainPanel');
-    if (!panel || panel.querySelector('#genieModeRow')) return;
+    const card = document.querySelector('#featuresOverlay .shortcuts-card');
+    if (!card || card.querySelector('#genieModeRow')) return;
     const row = document.createElement('div');
-    row.className = 'settings-row';
+    row.className = 'feature-row';
     row.id = 'genieModeRow';
-    row.setAttribute('role', 'button');
-    row.tabIndex = 0;
-    row.innerHTML = '<span>Window animation</span><span class="settings-row-value" id="genieModeValue"></span><span class="settings-row-chevron" style="visibility:hidden">›</span>';
-    row.querySelector('#genieModeValue').textContent = label();
-    const toggle = e => { e.stopPropagation(); e.preventDefault(); setMode(mode === 'genie' ? 'classic' : 'genie'); };
-    row.addEventListener('click', toggle);
-    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') toggle(e); });
-    panel.appendChild(row);
+    row.innerHTML =
+      '<div class="feature-info">' +
+        '<div class="feature-name">Window animation</div>' +
+        '<div class="feature-desc">Genie: windows fly in and out of the button that opened them. Classic: the player\'s original animation.</div>' +
+      '</div>' +
+      '<div class="genie-seg" role="radiogroup" aria-label="Window animation">' +
+        '<button type="button" role="radio" data-m="genie">Genie</button>' +
+        '<button type="button" role="radio" data-m="classic">Classic</button>' +
+      '</div>';
+    row.addEventListener('click', e => {
+      const b = e.target.closest('button[data-m]');
+      e.stopPropagation();
+      if (b) setMode(b.dataset.m);
+    });
+    const rows = card.querySelectorAll('.feature-row');
+    const last = rows[rows.length - 1];
+    if (last) last.after(row); else card.appendChild(row);
+    syncSwitch();
   }
 
   /* ------------------------------------------------------------------ *
@@ -726,8 +745,8 @@
   function boot() {
     for (const cfg of TARGETS) { const t = makeTarget(cfg); if (t) targets.push(t); }
     injectRow();
-    const panel = document.getElementById('settingsMainPanel');
-    if (panel) new MutationObserver(injectRow).observe(panel, { childList: true });
+    const fcard = document.querySelector('#featuresOverlay .shortcuts-card');
+    if (fcard) new MutationObserver(injectRow).observe(fcard, { childList: true });
     reduced.addEventListener && reduced.addEventListener('change', () => { if (reduced.matches) cancelAll(); });
     for (const t of targets) if (!t.hidden) scheduleRefresh(t, 600);
   }
