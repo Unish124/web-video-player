@@ -1,4 +1,8 @@
-# Version v1.0.8
+# Version v1.0.9
+
+- Captions for local videos. Subtitle files (.srt / .vtt) that come with a video are found and loaded automatically: select them together with the videos, drop them together, or open a folder. A subtitle matches when its name starts with the video's name (movie.mp4 -> movie.srt, movie.en.srt, movie_English.vtt), in the same folder or a subfolder such as Subs. Press C to show or hide captions, Shift+C to switch between several tracks, or use the CC button. The + button (or dropping a subtitle file onto the player) adds a file manually. Both buttons can be hidden from the settings menu.
+
+## Earlier: v1.0.8
 
 - Facebook videos, fixes: (1) Playback: if the browser blocks auto-play, the player now says so and lets you click the Facebook video directly to start it; after that, the player's own play/pause, seek and shortcuts work. The play/pause state also keeps itself in sync if Facebook's events are missed. (2) Aspect ratio: the video is now scaled to fit the player with correct proportions (no stretching), portrait and landscape. (3) Title: Facebook's own header no longer overlaps the player's title bar; titles use the page name from the link when available, and any video can be renamed (three-dot menu > Rename, or double-click the title). Renames are saved with saved playlists.
 

@@ -1,4 +1,4 @@
-const CACHE = 'lvp-v1.0.8';
+const CACHE = 'lvp-v1.0.9';
 const ASSETS = [
   './',
   'index.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   'src/thumbs.js',
   'src/study-timer.js',
   'src/install.js',
+  'src/captions.js',
   'playback-enhancements/index.js',
   'playback-enhancements/duration.js',
   'playback-enhancements/speed.js',

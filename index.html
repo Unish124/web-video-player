@@ -13,7 +13,7 @@
 <body>
 <div id="app">
 
-  <input type="file" id="fileInput" multiple accept="video/*" hidden>
+  <input type="file" id="fileInput" multiple accept="video/*,.srt,.vtt" hidden>
 
   <div class="drop-zone" id="dropZone">
     <div class="drop-inner">
@@ -193,6 +193,12 @@
 
             </div>
           </div>
+          <button class="icon-btn small" id="ccAddBtn" title="Add subtitle file (.srt / .vtt)">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3v2zm-3-7V3.5L18.5 9H13z"/></svg>
+          </button>
+          <button class="icon-btn small" id="ccBtn" title="Captions (c)">
+            <svg viewBox="0 0 24 24"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
+          </button>
           <button class="icon-btn small" id="pipBtn" title="Picture-in-picture (i)">
             <svg viewBox="0 0 24 24"><path d="M19 7H9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm0 8H9V9h10v6zM3 5h2v2H3zm0 4h2v2H3zm0 4h2v2H3zm0 4h2v2H3zm4 2h2v-2H5v2H7zm4 0h2v-2h-2v2z" opacity="0"/><path d="M21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H3V5h18v14zm-2-8h-7a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1z"/></svg>
           </button>
@@ -389,6 +395,7 @@
 
 </div>
 
+  <script src="genie.js" defer></script>
   <script type="module" src="src/main.js"></script>
   <script src="course-feature.js"></script>
   <script type="module" src="playback-enhancements/index.js"></script>

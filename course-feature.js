@@ -526,6 +526,7 @@ const CourseFeature = (() => {
     cfSearchInput.value = '';
 
     const videoLessons = flatLessons.filter(l => l.kind === 'video');
+    if (window.LVPCaptions) window.LVPCaptions.registerFiles(files);
     importVideosIntoNativePlayer(videoLessons);
 
     courseId = computeCourseId(files);

@@ -1245,3 +1245,30 @@ body.lvp-no-select{ user-select:none; }
 @media (prefers-reduced-motion:reduce){
   .settings-menu.panel-pop{ animation:none; }
 }
+
+/* ---- Captions ---- */
+#captionLayer{
+  position:absolute;left:0;right:0;bottom:112px;
+  z-index:3;
+  display:flex;justify-content:center;
+  padding:0 6%;
+  pointer-events:none;
+  text-align:center;
+  transition:bottom var(--dur-base) var(--ease-smooth);
+}
+.player-wrapper.controls-hidden #captionLayer{ bottom:32px; }
+#captionLayer span{
+  display:inline-block;max-width:100%;
+  background:rgba(0,0,0,.72);
+  color:#fff;
+  font-size:clamp(15px,2.1vw,32px);
+  line-height:1.35;
+  padding:.15em .5em;
+  border-radius:4px;
+  text-shadow:0 1px 2px rgba(0,0,0,.9);
+  white-space:pre-wrap;
+}
+.player-wrapper.yt-mode #captionLayer,
+.player-wrapper.fb-mode #captionLayer{ display:none; }
+#ccBtn.cc-empty{ opacity:.5; }
+#ccBtn.active{ box-shadow:inset 0 -3px 0 var(--accent); border-radius:6px 6px 0 0; }

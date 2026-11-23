@@ -12,6 +12,7 @@ import {
 import { initPlaylist, handleFiles, loadVideo, closeUrlModal, renderLandingSaved } from './playlist.js';
 import { initStudyTimer } from './study-timer.js';
 import { initInstall } from './install.js';
+import { initCaptions, toggleCaptions, cycleCaptionTrack } from './captions.js';
 
 const SHORTCUTS = [
   ['Space / K', 'Play / pause'],
@@ -20,6 +21,8 @@ const SHORTCUTS = [
   ['\u2192  /  L', 'Forward (skip amount set in \u2699 settings)'],
   ['\u2191  /  \u2193', 'Volume up / down'],
   ['M', 'Mute / unmute'],
+  ['C', 'Show / hide captions'],
+  ['Shift + C', 'Switch caption track'],
   ['F', 'Fullscreen'],
   ['T', 'Theater mode'],
   ['I', 'Picture-in-picture'],
@@ -146,6 +149,10 @@ function wireKeyboardShortcuts() {
         e.preventDefault(); adjustVolume(-0.05); break;
       case 'm': case 'M':
         toggleMute(); break;
+      case 'c': case 'C':
+        if (e.ctrlKey || e.metaKey || e.altKey) break;
+        if (e.shiftKey) cycleCaptionTrack(); else toggleCaptions();
+        break;
       case 'f': case 'F':
         toggleFullscreen(); break;
       case 't': case 'T':
@@ -220,3 +227,4 @@ initControls();
 initPlaylist();
 initStudyTimer();
 initInstall();
+initCaptions();

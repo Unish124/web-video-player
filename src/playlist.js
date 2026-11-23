@@ -12,10 +12,17 @@ import {
 import { loadMediaItem, saveCurrentPosition, setOnEndedCallback, setOnDurationCallback, mediaDuration, mediaCurrentTime, parseFacebookUrl, stopEmbeds } from './media.js';
 import { ensureThumbnail, ensureYouTubeMeta } from './thumbs.js';
 import { initPlaylistSort } from './playlist-sort.js';
+import { isSubtitleFile, registerFiles, attachManual } from './captions.js';
 
 export function handleFiles(fileList, insertAt) {
-  const files = Array.from(fileList).filter(f => f.type.startsWith('video/') || /\.(mkv|mov|avi|webm|mp4|m4v|ogv)$/i.test(f.name));
-  if (!files.length) { showToast('No supported video files found'); return; }
+  const all = Array.from(fileList);
+  const subs = all.filter(isSubtitleFile);
+  const files = all.filter(f => f.type.startsWith('video/') || /\.(mkv|mov|avi|webm|mp4|m4v|ogv)$/i.test(f.name));
+  if (!files.length) {
+    if (subs.length) attachManual(subs); else showToast('No supported video files found');
+    return;
+  }
+  if (subs.length) registerFiles(subs);
   const startIndex = (Number.isInteger(insertAt) && insertAt >= 0 && insertAt <= state.playlist.length)
     ? insertAt
     : state.playlist.length;

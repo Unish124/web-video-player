@@ -43,6 +43,7 @@ const CONTROL_TOGGLES = [
   { key: 'loop',           label: 'Loop button',               selector: '#loopBtn' },
   { key: 'abloop',         label: 'A/B loop button',            selector: '#abLoopBtn' },
   { key: 'studytimer',     label: 'Study timer button',        selector: '.study-timer-wrap' },
+  { key: 'captions',       label: 'Captions buttons',          selector: '#ccBtn, #ccAddBtn' },
   { key: 'pip',            label: 'Picture-in-picture button', selector: '#pipBtn' },
   { key: 'theater',        label: 'Theater mode button',       selector: '#theaterBtn' },
   { key: 'fullscreen',     label: 'Fullscreen button',         selector: '#fullscreenBtn' },
